@@ -1,47 +1,37 @@
 <!DOCTYPE html>
 <html>
-
 <head>
 
 <meta charset="UTF-8">
-<title>Blackjack</title>
+<title>Telegram Blackjack</title>
 
 <style>
 
 body{
-font-family:Arial;
-background:#0f172a;
+background:#0b5c2e;
 color:white;
 text-align:center;
-padding:20px;
+font-family:Arial;
 }
 
 button{
-padding:10px 16px;
-margin:6px;
+padding:10px 20px;
+margin:10px;
+font-size:16px;
 border:none;
 border-radius:8px;
-background:#22c55e;
-color:white;
-font-weight:bold;
 cursor:pointer;
 }
 
-input{
-padding:6px;
+img{
+width:80px;
 margin:5px;
+border-radius:8px;
+box-shadow:0 3px 8px rgba(0,0,0,0.5);
 }
 
-.player{
-background:#1e293b;
-margin:10px;
-padding:10px;
-border-radius:10px;
-}
-
-.cards{
-font-size:28px;
-margin:10px;
+.hidden{
+display:none;
 }
 
 </style>
@@ -50,46 +40,92 @@ margin:10px;
 
 <body>
 
-<h2>🃏 Blackjack</h2>
+<h1>Blackjack</h1>
 
 <div id="setup">
 
-Players:
-<input id="playerCount" type="number" min="2" max="6" value="3">
+Players (including dealer):
+<input id="playerCount" type="number" min="2" max="8">
 
 <br><br>
 
-<button onclick="createPlayers()">Next</button>
+<button onclick="startGame()">Start Game</button>
 
 </div>
 
-<div id="names"></div>
 
-<div id="game"></div>
+<div id="game" class="hidden">
+
+<h2 id="playerTitle"></h2>
+
+<div id="cards"></div>
+
+<h3 id="score"></h3>
+
+<button id="hitBtn" onclick="hit()">Hit</button>
+<button onclick="stand()">Stand</button>
+
+<br>
+
+<button id="confirmBtn" class="hidden" onclick="confirmPass()">
+Confirm Pass
+</button>
+
+</div>
+
+
+<div id="passScreen" class="hidden">
+
+<h2>Pass device to next player</h2>
+
+<button onclick="nextPlayer()">Next Player</button>
+
+</div>
+
+
+<div id="revealScreen" class="hidden">
+
+<h2>All Cards</h2>
+
+<div id="allCards"></div>
+
+<h2 id="winner"></h2>
+
+<button onclick="location.reload()">Restart</button>
+
+</div>
+
+
 
 <script>
 
 let deck=[]
 let players=[]
 let currentPlayer=0
-let revealAll=false
-let waiting=false
-let revealed=false
+let dealerIndex=0
 
-const suits=["♠","♥","♦","♣"]
-const ranks=["A","2","3","4","5","6","7","8","9","10","J","Q","K"]
+
 
 function createDeck(){
 
+let suits=["♠","♥","♦","♣"]
+let values=["A","2","3","4","5","6","7","8","9","10","J","Q","K"]
+
 deck=[]
 
-for(let s of suits){
-for(let r of ranks){
-deck.push({card:s+r,value:r})
-}
+for(let suit of suits){
+
+for(let value of values){
+
+deck.push({value:value,suit:suit})
+
 }
 
 }
+
+}
+
+
 
 function shuffle(){
 
@@ -105,59 +141,16 @@ deck[j]=temp
 
 }
 
-function cardValue(rank){
 
-if(rank==="J"||rank==="Q"||rank==="K") return 10
-if(rank==="A") return 11
-return parseInt(rank)
 
-}
-
-function score(hand){
-
-let total=0
-let aces=0
-
-hand.forEach(c=>{
-
-let v=cardValue(c.value)
-
-if(c.value==="A") aces++
-
-total+=v
-
-})
-
-while(total>21 && aces>0){
-
-total-=10
-aces--
-
-}
-
-return total
-
-}
-
-function createPlayers(){
+function startGame(){
 
 let count=parseInt(document.getElementById("playerCount").value)
 
-let html="<h3>Enter Player Names</h3>"
-
-for(let i=0;i<count;i++){
-
-html+=`<input id="p${i}" placeholder="Player ${i+1}"><br>`
-
+if(count<2){
+alert("Need at least 2 players")
+return
 }
-
-html+=`<br><button onclick="startGame(${count})">Start Game</button>`
-
-document.getElementById("names").innerHTML=html
-
-}
-
-function startGame(count){
 
 createDeck()
 shuffle()
@@ -166,222 +159,287 @@ players=[]
 
 for(let i=0;i<count;i++){
 
-let name=document.getElementById("p"+i).value
-
-if(!name) name="Player "+(i+1)
-
 players.push({
-
-name:i==count-1 ? name+" (Dealer)" : name,
-
-hand:[]
-
+cards:[],
+bust:false
 })
 
 }
 
-for(let i=0;i<2;i++){
+dealerIndex=count-1
 
-players.forEach(p=>{
+for(let p of players){
 
-p.hand.push(deck.pop())
-
-})
-
-}
-
-render()
+p.cards.push(deck.pop())
+p.cards.push(deck.pop())
 
 }
 
-function revealCards(){
+document.getElementById("setup").classList.add("hidden")
+document.getElementById("game").classList.remove("hidden")
 
-revealed=true
-
-render()
+showPlayer()
 
 }
+
+
+
+function showPlayer(){
+
+let player=players[currentPlayer]
+
+document.getElementById("playerTitle").innerText=
+(currentPlayer==dealerIndex?"Dealer":"Player "+(currentPlayer+1))
+
+displayCards(player.cards)
+
+let score=calculateScore(player.cards)
+
+document.getElementById("score").innerText="Score: "+score
+
+document.getElementById("confirmBtn").classList.add("hidden")
+
+document.getElementById("hitBtn").disabled=false
+
+}
+
+
+
+function displayCards(cards){
+
+let html=""
+
+for(let card of cards){
+
+let suitCode={
+"♠":"S",
+"♥":"H",
+"♦":"D",
+"♣":"C"
+}[card.suit]
+
+let valueCode=card.value
+
+if(valueCode=="10") valueCode="0"
+
+let img=
+"https://deckofcardsapi.com/static/img/"+valueCode+suitCode+".png"
+
+html+=`<img src="${img}">`
+
+}
+
+document.getElementById("cards").innerHTML=html
+
+}
+
+
 
 function hit(){
 
-players[currentPlayer].hand.push(deck.pop())
+let player=players[currentPlayer]
 
-if(score(players[currentPlayer].hand)>21){
+player.cards.push(deck.pop())
+
+displayCards(player.cards)
+
+let score=calculateScore(player.cards)
+
+document.getElementById("score").innerText="Score: "+score
+
+if(score>21){
+
+document.getElementById("score").innerText="Score: "+score+" (BUST)"
+
+player.bust=true
+
+document.getElementById("hitBtn").disabled=true
 
 stand()
 
 }
 
-render()
-
 }
+
+
 
 function stand(){
 
-revealed=false
-
-waiting=true
-
-render()
+document.getElementById("confirmBtn").classList.remove("hidden")
 
 }
 
+
+
+function confirmPass(){
+
+document.getElementById("game").classList.add("hidden")
+document.getElementById("passScreen").classList.remove("hidden")
+
+}
+
+
+
 function nextPlayer(){
 
-waiting=false
+document.getElementById("passScreen").classList.add("hidden")
 
 currentPlayer++
 
 if(currentPlayer>=players.length){
 
-revealAll=true
-
-}
-
-render()
-
-}
-
-function winner(){
-
-let best=0
-let win="None"
-
-players.forEach(p=>{
-
-let s=score(p.hand)
-
-if(s<=21 && s>best){
-
-best=s
-win=p.name
-
-}
-
-})
-
-return win+" ("+best+")"
-
-}
-
-function render(){
-
-let game=document.getElementById("game")
-
-game.innerHTML=""
-
-if(waiting){
-
-game.innerHTML=`
-
-<h2>Pass Device</h2>
-
-<h3>${players[currentPlayer+1]?.name}</h3>
-
-<button onclick="nextPlayer()">I'm Ready</button>
-
-`
-
+revealAll()
 return
 
 }
 
-players.forEach((p,i)=>{
+document.getElementById("game").classList.remove("hidden")
 
-let div=document.createElement("div")
+showPlayer()
 
-div.className="player"
+}
 
-let cards=""
 
-if(revealAll){
 
-cards=p.hand.map(c=>c.card).join(" ")
+function calculateScore(cards){
 
-}else{
+let total=0
+let aces=0
+let cardCount=cards.length
 
-if(i===currentPlayer && revealed){
+for(let card of cards){
 
-cards=p.hand.map(c=>c.card).join(" ")
+if(card.value=="A"){
 
-}else{
+aces++
 
-cards="🂠 ".repeat(p.hand.length)
+}
+
+else if(["K","Q","J"].includes(card.value)){
+
+total+=10
+
+}
+
+else{
+
+total+=parseInt(card.value)
 
 }
 
 }
 
-let sc=""
 
-if(revealAll){
+if(aces==0) return total
 
-sc="Score: "+score(p.hand)
 
-}else{
+let possibleScores=[]
 
-if(i===currentPlayer && revealed){
+if(cardCount==2){
 
-sc="Score: "+score(p.hand)
+for(let i=0;i<=aces;i++){
+
+let score=total+(aces-i)*11+i*1
+possibleScores.push(score)
+
+}
+
+}
+
+else if(cardCount==3){
+
+for(let i=0;i<=aces;i++){
+
+let score=total+(aces-i)*10+i*1
+possibleScores.push(score)
 
 }
 
 }
 
-div.innerHTML=`
+else{
 
-<h3>${p.name}</h3>
-
-<div class="cards">${cards}</div>
-
-${sc}
-
-`
-
-game.appendChild(div)
-
-})
-
-if(!revealAll){
-
-if(!revealed){
-
-game.innerHTML+=`
-
-<button onclick="revealCards()">👁 Reveal My Cards</button>
-
-`
-
-}else{
-
-game.innerHTML+=`
-
-<h3>${players[currentPlayer].name} Turn</h3>
-
-<button onclick="hit()">Hit</button>
-
-<button onclick="stand()">Stand</button>
-
-`
+possibleScores.push(total+aces)
 
 }
 
-}else{
 
-game.innerHTML+=`
+let best=0
 
-<h2>🏆 Winner</h2>
+for(let s of possibleScores){
 
-<h3>${winner()}</h3>
-
-`
+if(s<=21 && s>best){
+best=s
+}
 
 }
+
+if(best==0){
+
+best=Math.min(...possibleScores)
+
+}
+
+return best
+
+}
+
+
+
+function revealAll(){
+
+document.getElementById("revealScreen").classList.remove("hidden")
+
+let html=""
+
+let bestScore=0
+let winner="Dealer"
+
+for(let i=0;i<players.length;i++){
+
+let p=players[i]
+
+let score=calculateScore(p.cards)
+
+html+="<h3>"+(i==dealerIndex?"Dealer":"Player "+(i+1))+"</h3>"
+
+for(let card of p.cards){
+
+let suitCode={
+"♠":"S",
+"♥":"H",
+"♦":"D",
+"♣":"C"
+}[card.suit]
+
+let valueCode=card.value
+if(valueCode=="10") valueCode="0"
+
+let img=
+"https://deckofcardsapi.com/static/img/"+valueCode+suitCode+".png"
+
+html+=`<img src="${img}">`
+
+}
+
+html+="<br>Score: "+score+"<br><br>"
+
+if(score<=21 && score>bestScore){
+
+bestScore=score
+winner=(i==dealerIndex?"Dealer":"Player "+(i+1))
+
+}
+
+}
+
+document.getElementById("allCards").innerHTML=html
+
+document.getElementById("winner").innerText="Winner: "+winner
 
 }
 
 </script>
 
 </body>
-
 </html>
