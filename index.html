@@ -265,34 +265,51 @@ document.getElementById("hitBtn").disabled=false
 
 document.getElementById("blackjackMsg").innerHTML=""
 
-function 
+checkBlackjack()
 
-checkBlackjack(){
-
-let player=players[currentPlayer]
-let cards=player.cards
-
-if(cards.length==2){
-
-let score=calculateScore(cards)
-
-let v1=cards[0].value
-let v2=cards[1].value
-
-let pairValues=["8","9","10","J","Q","K","A"]
-
-if(v1==v2 && pairValues.includes(v1)){
-
-document.getElementById("blackjackMsg").innerHTML=
-'<div class="blackjack">PAIR LOCK ('+v1+','+v2+')</div>'
-
-document.getElementById("hitBtn").disabled=true
-
-stand()
-
-return
 }
 
+
+
+function displayCards(cards){
+
+let html=""
+
+for(let i=0;i<cards.length;i++){
+
+let card=cards[i]
+
+let suitCode={
+"♠":"S",
+"♥":"H",
+"♦":"D",
+"♣":"C"
+}[card.suit]
+
+let valueCode=card.value
+
+if(valueCode=="10") valueCode="0"
+
+let img=
+"https://deckofcardsapi.com/static/img/"+valueCode+suitCode+".png"
+
+html+=`<img class="card" style="animation-delay:${i*0.2}s" src="${img}">`
+
+}
+
+document.getElementById("cards").innerHTML=html
+
+}
+
+
+
+function checkBlackjack(){
+
+let player=players[currentPlayer]
+
+if(player.cards.length==2){
+
+let score=calculateScore(player.cards)
 
 if(score==21){
 
