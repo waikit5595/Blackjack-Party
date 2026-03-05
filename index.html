@@ -23,15 +23,36 @@ border-radius:8px;
 cursor:pointer;
 }
 
-img{
+.card{
 width:80px;
 margin:5px;
 border-radius:8px;
 box-shadow:0 3px 8px rgba(0,0,0,0.5);
+opacity:0;
+transform:translateY(-20px);
+animation:deal 0.4s forwards;
+}
+
+@keyframes deal{
+to{
+opacity:1;
+transform:translateY(0);
+}
 }
 
 .hidden{
 display:none;
+}
+
+.blackjack{
+font-size:28px;
+color:gold;
+animation:flash 1s infinite alternate;
+}
+
+@keyframes flash{
+from{opacity:1}
+to{opacity:0.4}
 }
 
 </style>
@@ -61,6 +82,8 @@ Players (including dealer):
 <div id="cards"></div>
 
 <h3 id="score"></h3>
+
+<div id="blackjackMsg"></div>
 
 <button id="hitBtn" onclick="hit()">Hit</button>
 <button onclick="stand()">Stand</button>
@@ -161,7 +184,8 @@ for(let i=0;i<count;i++){
 
 players.push({
 cards:[],
-bust:false
+bust:false,
+blackjack:false
 })
 
 }
@@ -201,6 +225,10 @@ document.getElementById("confirmBtn").classList.add("hidden")
 
 document.getElementById("hitBtn").disabled=false
 
+document.getElementById("blackjackMsg").innerHTML=""
+
+checkBlackjack()
+
 }
 
 
@@ -209,7 +237,9 @@ function displayCards(cards){
 
 let html=""
 
-for(let card of cards){
+for(let i=0;i<cards.length;i++){
+
+let card=cards[i]
 
 let suitCode={
 "♠":"S",
@@ -225,11 +255,38 @@ if(valueCode=="10") valueCode="0"
 let img=
 "https://deckofcardsapi.com/static/img/"+valueCode+suitCode+".png"
 
-html+=`<img src="${img}">`
+html+=`<img class="card" style="animation-delay:${i*0.2}s" src="${img}">`
 
 }
 
 document.getElementById("cards").innerHTML=html
+
+}
+
+
+
+function checkBlackjack(){
+
+let player=players[currentPlayer]
+
+if(player.cards.length==2){
+
+let score=calculateScore(player.cards)
+
+if(score==21){
+
+player.blackjack=true
+
+document.getElementById("blackjackMsg").innerHTML=
+'<div class="blackjack">BLACKJACK!</div>'
+
+document.getElementById("hitBtn").disabled=true
+
+stand()
+
+}
+
+}
 
 }
 
@@ -246,6 +303,13 @@ displayCards(player.cards)
 let score=calculateScore(player.cards)
 
 document.getElementById("score").innerText="Score: "+score
+
+if(score==21){
+
+stand()
+return
+
+}
 
 if(score>21){
 
@@ -339,7 +403,7 @@ if(cardCount==2){
 
 for(let i=0;i<=aces;i++){
 
-let score=total+(aces-i)*11+i*1
+let score=total+(aces-i)*11+i
 possibleScores.push(score)
 
 }
@@ -350,7 +414,7 @@ else if(cardCount==3){
 
 for(let i=0;i<=aces;i++){
 
-let score=total+(aces-i)*10+i*1
+let score=total+(aces-i)*10+i
 possibleScores.push(score)
 
 }
@@ -418,7 +482,7 @@ if(valueCode=="10") valueCode="0"
 let img=
 "https://deckofcardsapi.com/static/img/"+valueCode+suitCode+".png"
 
-html+=`<img src="${img}">`
+html+=`<img class="card" src="${img}">`
 
 }
 
