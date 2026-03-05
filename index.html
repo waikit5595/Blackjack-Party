@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+<meta charset="UTF-8">
+<title>Blackjack</title>
+
+<style>
+
+body{
+font-family:Arial;
+background:#0f172a;
+color:white;
+text-align:center;
+padding:20px;
+}
+
+button{
+padding:10px 16px;
+margin:6px;
+border:none;
+border-radius:8px;
+background:#22c55e;
+color:white;
+font-weight:bold;
+cursor:pointer;
+}
+
+input{
+padding:6px;
+margin:5px;
+}
+
+.player{
+background:#1e293b;
+margin:10px;
+padding:10px;
+border-radius:10px;
+}
+
+.cards{
+font-size:28px;
+margin:10px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h2>🃏 Blackjack</h2>
+
+<div id="setup">
+
+Players:
+<input id="playerCount" type="number" min="2" max="6" value="3">
+
+<br><br>
+
+<button onclick="createPlayers()">Next</button>
+
+</div>
+
+<div id="names"></div>
+
+<div id="game"></div>
+
+<script>
+
+let deck=[]
+let players=[]
+let currentPlayer=0
+let revealAll=false
+let waiting=false
+let revealed=false
+
+const suits=["♠","♥","♦","♣"]
+const ranks=["A","2","3","4","5","6","7","8","9","10","J","Q","K"]
+
+function createDeck(){
+
+deck=[]
+
+for(let s of suits){
+for(let r of ranks){
+deck.push({card:s+r,value:r})
+}
+}
+
+}
+
+function shuffle(){
+
+for(let i=deck.length-1;i>0;i--){
+
+let j=Math.floor(Math.random()*(i+1))
+
+let temp=deck[i]
+deck[i]=deck[j]
+deck[j]=temp
+
+}
+
+}
+
+function cardValue(rank){
+
+if(rank==="J"||rank==="Q"||rank==="K") return 10
+if(rank==="A") return 11
+return parseInt(rank)
+
+}
+
+function score(hand){
+
+let total=0
+let aces=0
+
+hand.forEach(c=>{
+
+let v=cardValue(c.value)
+
+if(c.value==="A") aces++
+
+total+=v
+
+})
+
+while(total>21 && aces>0){
+
+total-=10
+aces--
+
+}
+
+return total
+
+}
+
+function createPlayers(){
+
+let count=parseInt(document.getElementById("playerCount").value)
+
+let html="<h3>Enter Player Names</h3>"
+
+for(let i=0;i<count;i++){
+
+html+=`<input id="p${i}" placeholder="Player ${i+1}"><br>`
+
+}
+
+html+=`<br><button onclick="startGame(${count})">Start Game</button>`
+
+document.getElementById("names").innerHTML=html
+
+}
+
+function startGame(count){
+
+createDeck()
+shuffle()
+
+players=[]
+
+for(let i=0;i<count;i++){
+
+let name=document.getElementById("p"+i).value
+
+if(!name) name="Player "+(i+1)
+
+players.push({
+
+name:i==count-1 ? name+" (Dealer)" : name,
+
+hand:[]
+
+})
+
+}
+
+for(let i=0;i<2;i++){
+
+players.forEach(p=>{
+
+p.hand.push(deck.pop())
+
+})
+
+}
+
+render()
+
+}
+
+function revealCards(){
+
+revealed=true
+
+render()
+
+}
+
+function hit(){
+
+players[currentPlayer].hand.push(deck.pop())
+
+if(score(players[currentPlayer].hand)>21){
+
+stand()
+
+}
+
+render()
+
+}
+
+function stand(){
+
+revealed=false
+
+waiting=true
+
+render()
+
+}
+
+function nextPlayer(){
+
+waiting=false
+
+currentPlayer++
+
+if(currentPlayer>=players.length){
+
+revealAll=true
+
+}
+
+render()
+
+}
+
+function winner(){
+
+let best=0
+let win="None"
+
+players.forEach(p=>{
+
+let s=score(p.hand)
+
+if(s<=21 && s>best){
+
+best=s
+win=p.name
+
+}
+
+})
+
+return win+" ("+best+")"
+
+}
+
+function render(){
+
+let game=document.getElementById("game")
+
+game.innerHTML=""
+
+if(waiting){
+
+game.innerHTML=`
+
+<h2>Pass Device</h2>
+
+<h3>${players[currentPlayer+1]?.name}</h3>
+
+<button onclick="nextPlayer()">I'm Ready</button>
+
+`
+
+return
+
+}
+
+players.forEach((p,i)=>{
+
+let div=document.createElement("div")
+
+div.className="player"
+
+let cards=""
+
+if(revealAll){
+
+cards=p.hand.map(c=>c.card).join(" ")
+
+}else{
+
+if(i===currentPlayer && revealed){
+
+cards=p.hand.map(c=>c.card).join(" ")
+
+}else{
+
+cards="🂠 ".repeat(p.hand.length)
+
+}
+
+}
+
+let sc=""
+
+if(revealAll){
+
+sc="Score: "+score(p.hand)
+
+}else{
+
+if(i===currentPlayer && revealed){
+
+sc="Score: "+score(p.hand)
+
+}
+
+}
+
+div.innerHTML=`
+
+<h3>${p.name}</h3>
+
+<div class="cards">${cards}</div>
+
+${sc}
+
+`
+
+game.appendChild(div)
+
+})
+
+if(!revealAll){
+
+if(!revealed){
+
+game.innerHTML+=`
+
+<button onclick="revealCards()">👁 Reveal My Cards</button>
+
+`
+
+}else{
+
+game.innerHTML+=`
+
+<h3>${players[currentPlayer].name} Turn</h3>
+
+<button onclick="hit()">Hit</button>
+
+<button onclick="stand()">Stand</button>
+
+`
+
+}
+
+}else{
+
+game.innerHTML+=`
+
+<h2>🏆 Winner</h2>
+
+<h3>${winner()}</h3>
+
+`
+
+}
+
+}
+
+</script>
+
+</body>
+
+</html>
