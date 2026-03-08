@@ -7,8 +7,8 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <style>
-body{background:#0b3d2e;color:white;text-align:center;font-family:Arial;}
-button{padding:10px 20px;margin:5px;font-size:16px;border:none;border-radius:8px;cursor:pointer;}
+body{background:#0b3d2e;color:white;font-family:Arial;text-align:center;}
+button{padding:10px 20px;margin:6px;font-size:16px;border:none;border-radius:8px;cursor:pointer;}
 .card{width:80px;height:120px;display:inline-block;background:white;color:black;border-radius:10px;margin:5px;line-height:120px;font-size:24px;animation:deal .4s;}
 .back{background:#333;color:#333;}
 .player{border:2px solid white;padding:10px;margin:10px;border-radius:10px;}
@@ -32,43 +32,70 @@ button{padding:10px 20px;margin:5px;font-size:16px;border:none;border-radius:8px
 <div id="controls"></div>
 
 <script>
-// ---------- Firebase ----------
-const firebaseConfig={apiKey:"AIzaSyA0d9D8_jSXeaS2opk4ZJulhzfFs9AroUo",authDomain:"blackjack-game-3e5d9.firebaseapp.com",databaseURL:"https://blackjack-game-3e5d9-default-rtdb.asia-southeast1.firebasedatabase.app",projectId:"blackjack-game-3e5d9",storageBucket:"blackjack-game-3e5d9.firebasestorage.app",messagingSenderId:"1006672400092",appId:"1:1006672400092:web:6d0f6fccc3becb9d1dae19"};
+// ---------- Firebase 配置 ----------
+const firebaseConfig = {apiKey:"AIzaSyA0d9D8_jSXeaS2opk4ZJulhzfFs9AroUo",authDomain:"blackjack-game-3e5d9.firebaseapp.com",databaseURL:"https://blackjack-game-3e5d9-default-rtdb.asia-southeast1.firebasedatabase.app",projectId:"blackjack-game-3e5d9",storageBucket:"blackjack-game-3e5d9.firebasestorage.app",messagingSenderId:"1006672400092",appId:"1:1006672400092:web:6d0f6fccc3becb9d1dae19"};
 firebase.initializeApp(firebaseConfig);
-const db=firebase.database();
+const db = firebase.database();
 
-// ---------- Telegram ----------
-const tg=window.Telegram.WebApp; tg.expand();
-let userID=tg.initDataUnsafe.user?.id||Math.floor(Math.random()*1000000);
-let username="Player"; let roomID=null;
+// ---------- 全局 ----------
+const tg = window.Telegram.WebApp;
+tg.expand();
+let userID = tg.initDataUnsafe.user?.id || Math.floor(Math.random()*1000000);
+let username = "Player";
+let roomID = null;
 
-// ---------- Deck & Cards ----------
-const suits=["♠","♥","♦","♣"], ranks=["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
-function createDeck(){let d=[];for(let s of suits)for(let r of ranks)d.push({rank:r,suit:s}); return d.sort(()=>Math.random()-0.5);}
-function value(r){if(r=="A") return 11;if(["J","Q","K"].includes(r)) return 10;return parseInt(r);}
-
-// ---------- Score Calculation ----------
-function score(hand){
-    let total=0, aces=hand.filter(c=>c.rank=="A").length;
-    let nonAces=hand.filter(c=>c.rank!="A");
-    total=nonAces.reduce((sum,c)=>sum+value(c.rank),0);
-    let best=0;
-    if(hand.length==2){for(let a of [1,11]){let s=total+a;if(s<=21&&s>best) best=s;}}
-    else if(hand.length==3){for(let a of [1,10]){let s=total+a;if(s<=21&&s>best) best=s;}}
-    else{best=total+aces;}
-    return best||total+aces;
+// ---------- 牌组 ----------
+const suits=["♠","♥","♦","♣"];
+const ranks=["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
+function createDeck(){
+    let deck=[];
+    for(let s of suits){for(let r of ranks){deck.push({rank:r,suit:s});}}
+    return deck.sort(()=>Math.random()-0.5);
 }
-function blackjack(hand){return hand.length==2 && ((hand[0].rank=="A" && value(hand[1].rank)==10) || (hand[1].rank=="A" && value(hand[0].rank)==10));}
+
+// ---------- 牌值计算 ----------
+function value(r){
+    if(r=="A") return 11;
+    if(["J","Q","K"].includes(r)) return 10;
+    return parseInt(r);
+}
+function score(hand){
+    let total=0, aces=0;
+    hand.forEach(c=>{if(c.rank=="A") aces++; else total+=value(c.rank);});
+    let best=0;
+    if(hand.length==2){
+        for(let a of [1,11]){
+            let s=total+a;
+            if(s<=21 && s>best) best=s;
+        }
+    } else if(hand.length==3){
+        for(let a of [1,10]){
+            let s=total+a;
+            if(s<=21 && s>best) best=s;
+        }
+    } else{
+        best=total+aces;
+    }
+    if(best===0) best=total+aces;
+    return best;
+}
+function blackjack(hand){return hand.length==2 && ((hand[0].rank=="A" && value(hand[1].rank)==10)||(hand[1].rank=="A" && value(hand[0].rank)==10));}
 function strongPair(hand){return hand.length==2 && hand[0].rank==hand[1].rank && value(hand[0].rank)>=8;}
 
-// ---------- Room ----------
+// ---------- 房间操作 ----------
 function createRoom(){
     username=document.getElementById("nameInput").value.trim()||"Host";
     roomID="room"+Math.floor(Math.random()*9999);
     db.ref("rooms/"+roomID).set({
-        host:userID, started:false, currentTurn:0, reveal:false,
-        deck:createDeck(), players:{[userID]:{name:username,hand:[],stand:false}}
+        host:userID,
+        started:false,
+        currentTurn:0,
+        reveal:false,
+        deck:createDeck(),
+        players:{}
     });
+    // 加入房主
+    db.ref("rooms/"+roomID+"/players/"+userID).set({name:username,hand:[],stand:false});
     listenRoom();
 }
 function joinRoom(){
@@ -79,74 +106,142 @@ function joinRoom(){
     listenRoom();
 }
 
-// ---------- Listen ----------
+// ---------- 监听房间 ----------
 function listenRoom(){
-    db.ref("rooms/"+roomID).on("value",snap=>{
-        let data=snap.val(); if(!data) return;
+    db.ref("rooms/"+roomID).on("value", snap=>{
+        let data = snap.val();
+        if(!data) return;
         document.getElementById("roomInfo").innerHTML=`Room: ${roomID}`;
         renderPlayers(data);
+
+        // 游戏未开始显示房主按钮
         if(!data.started && data.host==userID){
             let count=Object.keys(data.players).length;
-            document.getElementById("controls").innerHTML=`<div>玩家人数: ${count} (房主可开始游戏)</div><button onclick="startGame()">Start Game</button>`;
+            document.getElementById("controls").innerHTML=
+                `<div>玩家人数: ${count} (房主可开始游戏)</div>
+                <button onclick="startGame()">Start Game</button>`;
         }
-        if(data.started){renderGame(data); renderControls(data);}
+
+        // 游戏开始
+        if(data.started){
+            renderGame(data);
+            renderControls(data);
+        }
     });
 }
 
-// ---------- Start Game ----------
+// ---------- 开始游戏 ----------
 function startGame(){
     let ref=db.ref("rooms/"+roomID);
     ref.once("value").then(snap=>{
-        let data=snap.val(),deck=data.deck,players=data.players;
+        let data=snap.val();
+        let deck=data.deck;
+        let players=data.players;
         let ids=Object.keys(players);
-        let hostID=data.host;
-        let others=ids.filter(id=>id!=hostID);
-        let order=[...others,hostID];
-        order.forEach(id=>{players[id].hand=[deck.pop(),deck.pop()]; players[id].stand=false;});
-        ref.update({players:players,deck:deck,started:true,currentTurn:0,reveal:false,order:order});
+        // 排序保证房主最后补牌
+        ids.sort((a,b)=>a==data.host?1:b==data.host?-1:0);
+        data.playerOrder=ids;
+        ids.forEach(id=>{
+            players[id].hand=[deck.pop(),deck.pop()];
+            players[id].stand=false;
+        });
+        ref.update({players:players,deck:deck,started:true,currentTurn:0,reveal:false,playerOrder:ids});
     });
 }
 
-// ---------- Player Actions ----------
-function hit(){let ref=db.ref("rooms/"+roomID); ref.once("value").then(snap=>{let data=snap.val(),deck=data.deck,players=data.players; players[userID].hand.push(deck.pop()); ref.update({players:players,deck:deck});});}
+// ---------- 玩家操作 ----------
+function hit(){
+    let ref=db.ref("rooms/"+roomID);
+    ref.once("value").then(snap=>{
+        let data=snap.val();
+        let deck=data.deck;
+        let players=data.players;
+        players[userID].hand.push(deck.pop());
+        ref.update({players:players,deck:deck});
+    });
+}
 function stand(){
     let ref=db.ref("rooms/"+roomID);
     ref.once("value").then(snap=>{
-        let data=snap.val(),players=data.players,order=data.order;
-        players[userID].stand=true;
-        let idx=order.indexOf(userID);
-        let nextIdx=Math.min(idx+1,order.length-1);
-        ref.update({players:players,currentTurn:nextIdx});
-    });
-}
-function reveal(){db.ref("rooms/"+roomID).update({reveal:true});}
-function restartGame(){
-    let ref=db.ref("rooms/"+roomID);
-    ref.once("value").then(snap=>{
-        let data=snap.val(),deck=createDeck(),players=data.players;
-        Object.keys(players).forEach(id=>{players[id].hand=[]; players[id].stand=false;});
-        ref.update({started:false,currentTurn:0,reveal:false,deck:deck,players:players});
+        let data=snap.val();
+        let ids=data.playerOrder;
+        data.players[userID].stand=true;
+        let currentIndex=ids.indexOf(userID);
+        let nextIndex=Math.min(currentIndex+1,ids.length-1);
+        ref.update({players:data.players,currentTurn:nextIndex});
     });
 }
 
-// ---------- Render ----------
-function renderPlayers(data){let html=""; Object.values(data.players).forEach(p=>{html+=`<div class="player">${p.name}</div>`}); document.getElementById("players").innerHTML=html;}
-function renderGame(data){let html=""; let ids=data.order||Object.keys(data.players); ids.forEach(id=>{let p=data.players[id]; let turn=id==ids[data.currentTurn]?"turn":""; html+=`<div class="player ${turn}"><h3>${p.name}</h3>`; p.hand.forEach(c=>{html+=id==userID||data.reveal?`<div class="card">${c.rank}${c.suit}</div>`:`<div class="card back">🂠</div>`}); if(id==userID) html+=`<div>Score: ${score(p.hand)}</div>`; if(blackjack(p.hand)) html+=`<div class="blackjack">BLACKJACK!</div>`; html+="</div>";}); document.getElementById("game").innerHTML=html;}
+// ---------- 房主 Reveal ----------
+function reveal(){
+    db.ref("rooms/"+roomID).update({reveal:true});
+}
+
+// ---------- UI ----------
+function renderPlayers(data){
+    let html="";
+    Object.values(data.players).forEach(p=>{html+=`<div class="player">${p.name}</div>`;});
+    document.getElementById("players").innerHTML=html;
+}
+function renderGame(data){
+    let html="";
+    let ids=data.playerOrder||Object.keys(data.players);
+    ids.forEach((id,i)=>{
+        let p=data.players[id];
+        let turn=i==data.currentTurn?"turn":"";
+        html+=`<div class="player ${turn}"><h3>${p.name}</h3>`;
+        p.hand.forEach(c=>{
+            if(id==userID || data.reveal){html+=`<div class="card">${c.rank}${c.suit}</div>`;}
+            else{html+=`<div class="card back">🂠</div>`;}
+        });
+        if(id==userID){html+=`<div>Score: ${score(p.hand)}</div>`;}
+        if(blackjack(p.hand)){html+=`<div class="blackjack">BLACKJACK!</div>`;}
+        html+="</div>";
+    });
+    document.getElementById("game").innerHTML=html;
+}
 function renderControls(data){
-    if(!data.started) return;
-    let ids=data.order||Object.keys(data.players);
+    let ids=data.playerOrder||Object.keys(data.players);
     let current=ids[data.currentTurn];
-    if(current!=userID){document.getElementById("controls").innerHTML="等待其他玩家操作...";return;}
-    let player=data.players[userID]; let hs=score(player.hand);
-    let disableHit=blackjack(player.hand)||strongPair(player.hand)||hs>=21;
-    let hitBtn=disableHit?"":`<button onclick="hit()">Hit</button>`; let standBtn=`<button onclick="stand()">Stand / Pass</button>`;
+    if(current!=userID){
+        document.getElementById("controls").innerHTML="等待其他玩家操作..."; 
+        return;
+    }
+    let player=data.players[userID];
+    let handScore=score(player.hand);
+    let disableHit=blackjack(player.hand)||strongPair(player.hand)||handScore>=21;
+    let hitBtn=disableHit?"":`<button onclick="hit()">Hit</button>`;
+    let standBtn=`<button onclick="stand()">Stand / Pass</button>`;
     document.getElementById("controls").innerHTML=hitBtn+standBtn;
-    let lastPlayer=ids[ids.length-1];
-    if(userID==data.host && current==lastPlayer && allStand(data)){
-        document.getElementById("controls").innerHTML+=`<br><button onclick="reveal()">Reveal All</button><br><button onclick="restartGame()">Restart Game</button>`;
+
+    // 游戏最后庄家完成后显示 Reveal + 下一局
+    let allDone=ids.every(id=>data.players[id].stand);
+    if(data.host==userID && current==ids[ids.length-1] && allDone){
+        document.getElementById("controls").innerHTML+=
+            `<br><button onclick="reveal()">Reveal All</button>
+             <br><button onclick="nextRound()">Start Next Round</button>`;
     }
 }
-function allStand(data){return Object.values(data.players).every(p=>p.stand);}
+
+// ---------- 下一局 ----------
+function nextRound(){
+    db.ref("rooms/"+roomID).once("value").then(snap=>{
+        let data=snap.val();
+        let deck=createDeck();
+        let players=data.players;
+        Object.keys(players).forEach(id=>{
+            players[id].hand=[];
+            players[id].stand=false;
+        });
+        db.ref("rooms/"+roomID).update({
+            deck:deck,
+            players:players,
+            started:false,
+            currentTurn:0,
+            reveal:false
+        });
+    });
+}
 </script>
 </body>
 </html>
