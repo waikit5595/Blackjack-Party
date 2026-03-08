@@ -3,255 +3,43 @@
 <head>
 
 <meta charset="UTF-8">
-<title>Blackjack Online</title>
 
-<style>
+<title>Telegram Blackjack Pro</title>
 
-body{
-background:#0b5c2e;
-color:white;
-text-align:center;
-font-family:Arial;
-}
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-button{
-padding:10px 20px;
-margin:10px;
-font-size:16px;
-border-radius:8px;
-border:none;
-}
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 
-.card{
-width:80px;
-margin:5px;
-}
-
-</style>
+<link rel="stylesheet" href="style.css">
 
 </head>
 
 <body>
 
-<h1>Blackjack Online</h1>
+<h1>🂡 Blackjack</h1>
 
-<div id="menu">
-
-<input id="name" placeholder="Your Name">
-
-<br><br>
+<div id="lobby">
 
 <button onclick="createRoom()">Create Room</button>
 
-<br><br>
-
-<input id="roomId" placeholder="Room ID">
+<input id="roomInput" placeholder="Room ID">
 
 <button onclick="joinRoom()">Join Room</button>
 
 </div>
 
+<div id="room"></div>
 
-<div id="game" style="display:none">
+<div id="players"></div>
 
-<h2 id="roomTitle"></h2>
+<div id="game"></div>
 
-<h3 id="turnInfo"></h3>
+<div id="controls"></div>
 
-<div id="cards"></div>
-
-<br>
-
-<button id="hitBtn" onclick="hit()">Hit</button>
-<button onclick="stand()">Stand</button>
-
-</div>
-
-
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-
-<script>
-
-const firebaseConfig = {
-apiKey: "AIzaSyA0d9D8_jSXeaS2opk4ZJulhzfFs9AroUo",
-authDomain: "blackjack-game-3e5d9.firebaseapp.com",
-databaseURL: "https://blackjack-game-3e5d9-default-rtdb.asia-southeast1.firebasedatabase.app",
-projectId: "blackjack-game-3e5d9",
-storageBucket: "blackjack-game-3e5d9.firebasestorage.app",
-messagingSenderId: "1006672400092",
-appId: "1:1006672400092:web:6d0f6fccc3becb9d1dae19"
-};
-
-firebase.initializeApp(firebaseConfig)
-
-const db=firebase.database()
-
-let room=""
-let playerId=""
-let myIndex=0
-
-function randomId(){
-
-return Math.random().toString(36).substring(2,7)
-
-}
-
-function createRoom(){
-
-let name=document.getElementById("name").value
-
-room=randomId()
-
-playerId=randomId()
-
-db.ref("rooms/"+room).set({
-
-started:false,
-turn:0,
-players:{
-[playerId]:{
-name:name,
-cards:[]
-}
-}
-
-})
-
-listenRoom()
-
-alert("Room ID: "+room)
-
-startUI()
-
-}
-
-function joinRoom(){
-
-room=document.getElementById("roomId").value
-
-let name=document.getElementById("name").value
-
-playerId=randomId()
-
-db.ref("rooms/"+room+"/players/"+playerId).set({
-
-name:name,
-cards:[]
-
-})
-
-listenRoom()
-
-startUI()
-
-}
-
-function startUI(){
-
-document.getElementById("menu").style.display="none"
-document.getElementById("game").style.display="block"
-
-document.getElementById("roomTitle").innerText="Room: "+room
-
-}
-
-function listenRoom(){
-
-db.ref("rooms/"+room).on("value",snap=>{
-
-let data=snap.val()
-
-updateGame(data)
-
-})
-
-}
-
-function updateGame(data){
-
-let players=Object.keys(data.players)
-
-myIndex=players.indexOf(playerId)
-
-let turn=data.turn
-
-if(turn==myIndex){
-
-document.getElementById("turnInfo").innerText="Your Turn"
-
-document.getElementById("hitBtn").disabled=false
-
-}else{
-
-document.getElementById("turnInfo").innerText="Waiting..."
-
-document.getElementById("hitBtn").disabled=true
-
-}
-
-let myCards=data.players[playerId].cards
-
-displayCards(myCards)
-
-}
-
-function displayCards(cards){
-
-let html=""
-
-cards.forEach(card=>{
-
-let suitCode={
-"♠":"S",
-"♥":"H",
-"♦":"D",
-"♣":"C"
-}[card.suit]
-
-let valueCode=card.value
-
-if(valueCode=="10") valueCode="0"
-
-let img="https://deckofcardsapi.com/static/img/"+valueCode+suitCode+".png"
-
-html+=`<img class="card" src="${img}">`
-
-})
-
-document.getElementById("cards").innerHTML=html
-
-}
-
-function drawCard(){
-
-let suits=["♠","♥","♦","♣"]
-let values=["A","2","3","4","5","6","7","8","9","10","J","Q","K"]
-
-return{
-
-value:values[Math.floor(Math.random()*13)],
-suit:suits[Math.floor(Math.random()*4)]
-
-}
-
-}
-
-function hit(){
-
-let card=drawCard()
-
-db.ref("rooms/"+room+"/players/"+playerId+"/cards").push(card)
-
-}
-
-function stand(){
-
-db.ref("rooms/"+room+"/turn").transaction(t=>t+1)
-
-}
-
-</script>
+<script src="firebase.js"></script>
+<script src="game.js"></script>
 
 </body>
+
 </html>

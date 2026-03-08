@@ -1,0 +1,50 @@
+body{
+background:#0b3d2e;
+color:white;
+font-family:Arial;
+text-align:center;
+}
+
+button{
+padding:10px 20px;
+margin:5px;
+font-size:16px;
+border-radius:8px;
+border:none;
+cursor:pointer;
+}
+
+.card{
+display:inline-block;
+width:70px;
+height:100px;
+background:white;
+color:black;
+border-radius:10px;
+line-height:100px;
+font-size:22px;
+margin:4px;
+animation:deal .3s;
+}
+
+.back{
+background:#222;
+color:#222;
+}
+
+@keyframes deal{
+from{transform:translateY(-30px);opacity:0}
+to{transform:translateY(0);opacity:1}
+}
+
+.blackjack{
+font-size:28px;
+color:gold;
+animation:blink 1s infinite;
+}
+
+@keyframes blink{
+0%{opacity:1}
+50%{opacity:.2}
+100%{opacity:1}
+}
