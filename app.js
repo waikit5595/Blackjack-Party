@@ -1,160 +1,183 @@
-const tg=window.Telegram.WebApp
-tg.expand()
+const tg = window.Telegram.WebApp;
+tg.expand();
 
-let userID=tg.initDataUnsafe.user?.id || Math.random()
+// 用户ID（Telegram用户ID，如果获取不到用随机数）
+let userID = tg.initDataUnsafe.user?.id || Math.floor(Math.random() * 1000000);
 
-let username="Player"
+// 玩家名字
+let username = "Player";
 
-let roomID=null
+// 当前房间ID
+let roomID = null;
 
-function createRoom(){
+// 创建房间
+function createRoom() {
+    username = document.getElementById("nameInput").value.trim() || "Host";
 
-username=document.getElementById("nameInput").value
+    roomID = "room" + Math.floor(Math.random() * 9999);
 
-roomID="room"+Math.floor(Math.random()*9999)
+    db.ref("rooms/" + roomID).set({
+        host: userID,
+        started: false,
+        currentTurn: 0,
+        reveal: false,
+        deck: createDeck(),
+        players: {
+            [userID]: {
+                name: username,
+                hand: [],
+                stand: false
+            }
+        }
+    });
 
-db.ref("rooms/"+roomID).set({
-
-host:userID,
-started:false,
-currentTurn:0,
-reveal:false,
-deck:createDeck(),
-players:{
-[userID]:{
-name:username,
-hand:[],
-stand:false
-}
-}
-
-})
-
-listenRoom()
-
-}
-
-function joinRoom(){
-
-username=document.getElementById("nameInput").value
-
-roomID=document.getElementById("roomInput").value
-
-db.ref("rooms/"+roomID+"/players/"+userID).set({
-
-name:username,
-hand:[],
-stand:false
-
-})
-
-listenRoom()
-
+    listenRoom();
 }
 
-function listenRoom(){
+// 加入房间
+function joinRoom() {
+    username = document.getElementById("nameInput").value.trim() || "Player";
 
-db.ref("rooms/"+roomID).on("value",snap=>{
+    roomID = document.getElementById("roomInput").value.trim();
+    if (!roomID) {
+        alert("请输入房间ID");
+        return;
+    }
 
-let data=snap.val()
+    db.ref("rooms/" + roomID + "/players/" + userID).set({
+        name: username,
+        hand: [],
+        stand: false
+    });
 
-if(!data) return
-
-document.getElementById("roomInfo").innerHTML="Room: "+roomID
-
-renderPlayers(data)
-
-if(data.started){
-
-renderGame(data)
-
+    listenRoom();
 }
 
-})
+// 监听房间数据
+function listenRoom() {
+    db.ref("rooms/" + roomID).on("value", snap => {
+        let data = snap.val();
+        if (!data) return;
 
+        document.getElementById("roomInfo").innerHTML = "Room: " + roomID;
+
+        renderPlayers(data);
+
+        // 房主显示 Start Game 按钮
+        if (data.host == userID && data.started === false) {
+            document.getElementById("controls").innerHTML =
+                `<button onclick="startGame()">Start Game</button>`;
+        }
+
+        // 游戏开始后渲染
+        if (data.started) {
+            renderGame(data);
+            renderControls(data);
+        }
+    });
 }
 
-function startGame(){
+// 开始游戏（房主点击）
+function startGame() {
+    let ref = db.ref("rooms/" + roomID);
 
-let ref=db.ref("rooms/"+roomID)
+    ref.once("value").then(snap => {
+        let data = snap.val();
+        let deck = data.deck;
+        let players = data.players;
 
-ref.once("value").then(snap=>{
+        // 每人发两张牌
+        Object.keys(players).forEach(id => {
+            players[id].hand = [deck.pop(), deck.pop()];
+            players[id].stand = false; // 重置状态
+        });
 
-let data=snap.val()
-
-let deck=data.deck
-
-let players=data.players
-
-Object.keys(players).forEach(id=>{
-
-players[id].hand=[deck.pop(),deck.pop()]
-
-})
-
-ref.update({
-
-players:players,
-deck:deck,
-started:true
-
-})
-
-})
-
+        ref.update({
+            players: players,
+            deck: deck,
+            started: true,
+            currentTurn: 0,
+            reveal: false
+        });
+    });
 }
 
-function hit(){
+// 玩家抽牌
+function hit() {
+    let ref = db.ref("rooms/" + roomID);
 
-let ref=db.ref("rooms/"+roomID)
+    ref.once("value").then(snap => {
+        let data = snap.val();
+        let deck = data.deck;
+        let players = data.players;
 
-ref.once("value").then(snap=>{
+        players[userID].hand.push(deck.pop());
 
-let data=snap.val()
-
-let deck=data.deck
-
-let players=data.players
-
-players[userID].hand.push(deck.pop())
-
-ref.update({
-
-players:players,
-deck:deck
-
-})
-
-})
-
+        ref.update({
+            players: players,
+            deck: deck
+        });
+    });
 }
 
-function stand(){
+// 玩家选择停止补牌
+function stand() {
+    let ref = db.ref("rooms/" + roomID);
 
-let ref=db.ref("rooms/"+roomID)
+    ref.once("value").then(snap => {
+        let data = snap.val();
+        let ids = Object.keys(data.players);
 
-ref.once("value").then(snap=>{
+        let nextTurn = data.currentTurn + 1;
 
-let data=snap.val()
+        // 如果轮到最后一人则不超过总玩家数
+        if (nextTurn >= ids.length) nextTurn = ids.length - 1;
 
-let next=data.currentTurn+1
+        // 标记玩家停止
+        data.players[userID].stand = true;
 
-ref.update({
-
-currentTurn:next
-
-})
-
-})
-
+        ref.update({
+            players: data.players,
+            currentTurn: nextTurn
+        });
+    });
 }
 
-function reveal(){
+// 房主公开所有牌
+function reveal() {
+    db.ref("rooms/" + roomID).update({
+        reveal: true
+    });
+}
 
-db.ref("rooms/"+roomID).update({
+// 渲染玩家操作按钮
+function renderControls(data) {
+    let ids = Object.keys(data.players);
+    let currentPlayer = ids[data.currentTurn];
 
-reveal:true
+    if (currentPlayer != userID) {
+        document.getElementById("controls").innerHTML = "等待其他玩家...";
+        return;
+    }
 
-})
+    let player = data.players[userID];
+    let handScore = score(player.hand);
 
+    // 判断是否自动锁牌（Blackjack或对子8+）
+    let disableHit = blackjack(player.hand) || strongPair(player.hand) || handScore >= 21;
+
+    let hitBtn = disableHit ? "" : `<button onclick="hit()">Hit</button>`;
+    let standBtn = `<button onclick="stand()">Stand / Pass</button>`;
+
+    document.getElementById("controls").innerHTML = hitBtn + standBtn;
+
+    // 如果是房主，游戏结束显示 Reveal
+    if (data.host == userID && data.currentTurn == ids.length - 1 && allStand(data)) {
+        document.getElementById("controls").innerHTML += `<br><button onclick="reveal()">Reveal All</button>`;
+    }
+}
+
+// 判断所有玩家是否都停止补牌
+function allStand(data) {
+    return Object.values(data.players).every(p => p.stand);
 }
