@@ -3,7 +3,7 @@
 <head>
 
 <meta charset="UTF-8">
-<title>Telegram Blackjack</title>
+<title>Blackjack Online</title>
 
 <style>
 
@@ -18,48 +18,13 @@ button{
 padding:10px 20px;
 margin:10px;
 font-size:16px;
-border:none;
 border-radius:8px;
-cursor:pointer;
+border:none;
 }
 
 .card{
 width:80px;
 margin:5px;
-border-radius:8px;
-box-shadow:0 3px 8px rgba(0,0,0,0.5);
-opacity:0;
-transform:translateY(-20px);
-animation:deal 0.4s forwards;
-}
-
-@keyframes deal{
-to{
-opacity:1;
-transform:translateY(0);
-}
-}
-
-.hidden{
-display:none;
-}
-
-.blackjack{
-font-size:28px;
-color:gold;
-animation:flash 1s infinite alternate;
-}
-
-@keyframes flash{
-from{opacity:1}
-to{opacity:0.4}
-}
-
-input{
-padding:8px;
-margin:5px;
-border-radius:6px;
-border:none;
 }
 
 </style>
@@ -68,216 +33,174 @@ border:none;
 
 <body>
 
-<h1>Blackjack</h1>
+<h1>Blackjack Online</h1>
 
-<div id="setup">
+<div id="menu">
 
-Players (including dealer):
-<input id="playerCount" type="number" min="2" max="8">
+<input id="name" placeholder="Your Name">
 
 <br><br>
 
-<button onclick="generateNameInputs()">Next</button>
+<button onclick="createRoom()">Create Room</button>
 
-<div id="nameInputs"></div>
+<br><br>
+
+<input id="roomId" placeholder="Room ID">
+
+<button onclick="joinRoom()">Join Room</button>
 
 </div>
 
 
-<div id="game" class="hidden">
+<div id="game" style="display:none">
 
-<h2 id="playerTitle"></h2>
+<h2 id="roomTitle"></h2>
+
+<h3 id="turnInfo"></h3>
 
 <div id="cards"></div>
 
-<h3 id="score"></h3>
-
-<div id="blackjackMsg"></div>
+<br>
 
 <button id="hitBtn" onclick="hit()">Hit</button>
 <button onclick="stand()">Stand</button>
 
-<br>
-
-<button id="confirmBtn" class="hidden" onclick="confirmPass()">
-Confirm Pass
-</button>
-
 </div>
 
 
-<div id="passScreen" class="hidden">
-
-<h2>Pass device to next player</h2>
-
-<button onclick="nextPlayer()">Next Player</button>
-
-</div>
-
-
-<div id="revealScreen" class="hidden">
-
-<h2>All Cards</h2>
-
-<div id="allCards"></div>
-
-<h2 id="winner"></h2>
-
-<button onclick="location.reload()">Restart</button>
-
-</div>
-
-
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
 <script>
 
-let deck=[]
-let players=[]
-let playerNames=[]
-let currentPlayer=0
-let dealerIndex=0
+const firebaseConfig = {
+apiKey: "AIzaSyA0d9D8_jSXeaS2opk4ZJulhzfFs9AroUo",
+authDomain: "blackjack-game-3e5d9.firebaseapp.com",
+databaseURL: "https://blackjack-game-3e5d9-default-rtdb.asia-southeast1.firebasedatabase.app",
+projectId: "blackjack-game-3e5d9",
+storageBucket: "blackjack-game-3e5d9.firebasestorage.app",
+messagingSenderId: "1006672400092",
+appId: "1:1006672400092:web:6d0f6fccc3becb9d1dae19"
+};
 
+firebase.initializeApp(firebaseConfig)
 
+const db=firebase.database()
 
-function generateNameInputs(){
+let room=""
+let playerId=""
+let myIndex=0
 
-let count=parseInt(document.getElementById("playerCount").value)
+function randomId(){
 
-if(count<2){
-alert("Need at least 2 players")
-return
-}
-
-let html="<h3>Enter Player Names</h3>"
-
-for(let i=0;i<count;i++){
-
-html+=`<input id="name${i}" placeholder="Player ${i+1}"><br>`
-
-}
-
-html+=`<br><button onclick="startGame()">Start Game</button>`
-
-document.getElementById("nameInputs").innerHTML=html
+return Math.random().toString(36).substring(2,7)
 
 }
 
+function createRoom(){
 
+let name=document.getElementById("name").value
 
-function createDeck(){
+room=randomId()
 
-let suits=["♠","♥","♦","♣"]
-let values=["A","2","3","4","5","6","7","8","9","10","J","Q","K"]
+playerId=randomId()
 
-deck=[]
+db.ref("rooms/"+room).set({
 
-for(let suit of suits){
+started:false,
+turn:0,
+players:{
+[playerId]:{
+name:name,
+cards:[]
+}
+}
 
-for(let value of values){
+})
 
-deck.push({value:value,suit:suit})
+listenRoom()
+
+alert("Room ID: "+room)
+
+startUI()
 
 }
 
-}
+function joinRoom(){
+
+room=document.getElementById("roomId").value
+
+let name=document.getElementById("name").value
+
+playerId=randomId()
+
+db.ref("rooms/"+room+"/players/"+playerId).set({
+
+name:name,
+cards:[]
+
+})
+
+listenRoom()
+
+startUI()
 
 }
 
+function startUI(){
 
+document.getElementById("menu").style.display="none"
+document.getElementById("game").style.display="block"
 
-function shuffle(){
-
-for(let i=deck.length-1;i>0;i--){
-
-let j=Math.floor(Math.random()*(i+1))
-
-let temp=deck[i]
-deck[i]=deck[j]
-deck[j]=temp
+document.getElementById("roomTitle").innerText="Room: "+room
 
 }
 
-}
+function listenRoom(){
 
+db.ref("rooms/"+room).on("value",snap=>{
 
+let data=snap.val()
 
-function startGame(){
+updateGame(data)
 
-let count=parseInt(document.getElementById("playerCount").value)
-
-createDeck()
-shuffle()
-
-players=[]
-playerNames=[]
-
-for(let i=0;i<count;i++){
-
-let name=document.getElementById("name"+i).value
-
-if(name=="") name="Player "+(i+1)
-
-playerNames.push(name)
-
-players.push({
-cards:[],
-bust:false,
-blackjack:false
 })
 
 }
 
-dealerIndex=count-1
+function updateGame(data){
 
-for(let p of players){
+let players=Object.keys(data.players)
 
-p.cards.push(deck.pop())
-p.cards.push(deck.pop())
+myIndex=players.indexOf(playerId)
 
-}
+let turn=data.turn
 
-document.getElementById("setup").classList.add("hidden")
-document.getElementById("game").classList.remove("hidden")
+if(turn==myIndex){
 
-showPlayer()
-
-}
-
-
-
-function showPlayer(){
-
-let player=players[currentPlayer]
-
-let name=playerNames[currentPlayer]
-
-document.getElementById("playerTitle").innerText=name+"'s Turn"
-
-displayCards(player.cards)
-
-let score=calculateScore(player.cards)
-
-document.getElementById("score").innerText="Score: "+score
-
-document.getElementById("confirmBtn").classList.add("hidden")
+document.getElementById("turnInfo").innerText="Your Turn"
 
 document.getElementById("hitBtn").disabled=false
 
-document.getElementById("blackjackMsg").innerHTML=""
+}else{
 
-checkBlackjackOrPairLock()
+document.getElementById("turnInfo").innerText="Waiting..."
+
+document.getElementById("hitBtn").disabled=true
 
 }
 
+let myCards=data.players[playerId].cards
 
+displayCards(myCards)
+
+}
 
 function displayCards(cards){
 
 let html=""
 
-for(let i=0;i<cards.length;i++){
-
-let card=cards[i]
+cards.forEach(card=>{
 
 let suitCode={
 "♠":"S",
@@ -290,257 +213,41 @@ let valueCode=card.value
 
 if(valueCode=="10") valueCode="0"
 
-let img=
-"https://deckofcardsapi.com/static/img/"+valueCode+suitCode+".png"
+let img="https://deckofcardsapi.com/static/img/"+valueCode+suitCode+".png"
 
-html+=`<img class="card" style="animation-delay:${i*0.2}s" src="${img}">`
+html+=`<img class="card" src="${img}">`
 
-}
+})
 
 document.getElementById("cards").innerHTML=html
 
 }
 
+function drawCard(){
 
+let suits=["♠","♥","♦","♣"]
+let values=["A","2","3","4","5","6","7","8","9","10","J","Q","K"]
 
-// ✅ 新规则函数：Blackjack 或 高对子锁牌
+return{
 
-function checkBlackjackOrPairLock(){
-
-let player=players[currentPlayer]
-let cards=player.cards
-
-if(cards.length==2){
-
-let score=calculateScore(cards)
-
-let v1=cards[0].value
-let v2=cards[1].value
-
-// 高对子锁牌
-let pairValues=["8","9","10","J","Q","K","A"]
-
-if(v1==v2 && pairValues.includes(v1)){
-
-document.getElementById("blackjackMsg").innerHTML=
-'<div class="blackjack">PAIR LOCK ('+v1+','+v2+')</div>'
-
-document.getElementById("hitBtn").disabled=true
-
-stand()
-
-return
-}
-
-// Blackjack
-if(score==21){
-
-player.blackjack=true
-
-document.getElementById("blackjackMsg").innerHTML=
-'<div class="blackjack">BLACKJACK!</div>'
-
-document.getElementById("hitBtn").disabled=true
-
-stand()
+value:values[Math.floor(Math.random()*13)],
+suit:suits[Math.floor(Math.random()*4)]
 
 }
 
 }
-
-}
-
-
 
 function hit(){
 
-let player=players[currentPlayer]
+let card=drawCard()
 
-player.cards.push(deck.pop())
-
-displayCards(player.cards)
-
-let score=calculateScore(player.cards)
-
-document.getElementById("score").innerText="Score: "+score
-
-if(score==21){
-
-stand()
-return
+db.ref("rooms/"+room+"/players/"+playerId+"/cards").push(card)
 
 }
-
-if(score>21){
-
-document.getElementById("score").innerText="Score: "+score+" (BUST)"
-
-player.bust=true
-
-document.getElementById("hitBtn").disabled=true
-
-stand()
-
-}
-
-}
-
-
 
 function stand(){
 
-document.getElementById("confirmBtn").classList.remove("hidden")
-
-}
-
-
-
-function confirmPass(){
-
-document.getElementById("game").classList.add("hidden")
-document.getElementById("passScreen").classList.remove("hidden")
-
-}
-
-
-
-function nextPlayer(){
-
-document.getElementById("passScreen").classList.add("hidden")
-
-currentPlayer++
-
-if(currentPlayer>=players.length){
-
-revealAll()
-return
-
-}
-
-document.getElementById("game").classList.remove("hidden")
-
-showPlayer()
-
-}
-
-
-
-function calculateScore(cards){
-
-let total=0
-let aces=0
-let cardCount=cards.length
-
-for(let card of cards){
-
-if(card.value=="A"){
-aces++
-}
-
-else if(["K","Q","J"].includes(card.value)){
-total+=10
-}
-
-else{
-total+=parseInt(card.value)
-}
-
-}
-
-if(aces==0) return total
-
-let possibleScores=[]
-
-if(cardCount==2){
-
-for(let i=0;i<=aces;i++){
-possibleScores.push(total+(aces-i)*11+i)
-}
-
-}
-
-else if(cardCount==3){
-
-for(let i=0;i<=aces;i++){
-possibleScores.push(total+(aces-i)*10+i)
-}
-
-}
-
-else{
-
-possibleScores.push(total+aces)
-
-}
-
-let best=0
-
-for(let s of possibleScores){
-if(s<=21 && s>best){
-best=s
-}
-}
-
-if(best==0){
-best=Math.min(...possibleScores)
-}
-
-return best
-
-}
-
-
-
-function revealAll(){
-
-document.getElementById("revealScreen").classList.remove("hidden")
-
-let html=""
-
-let bestScore=0
-let winner="Dealer"
-
-for(let i=0;i<players.length;i++){
-
-let p=players[i]
-
-let score=calculateScore(p.cards)
-
-html+="<h3>"+playerNames[i]+"</h3>"
-
-for(let card of p.cards){
-
-let suitCode={
-"♠":"S",
-"♥":"H",
-"♦":"D",
-"♣":"C"
-}[card.suit]
-
-let valueCode=card.value
-if(valueCode=="10") valueCode="0"
-
-let img=
-"https://deckofcardsapi.com/static/img/"+valueCode+suitCode+".png"
-
-html+=`<img class="card" src="${img}">`
-
-}
-
-html+="<br>Score: "+score+"<br><br>"
-
-if(score<=21 && score>bestScore){
-
-bestScore=score
-winner=playerNames[i]
-
-}
-
-}
-
-document.getElementById("allCards").innerHTML=html
-
-document.getElementById("winner").innerText="Winner: "+winner
+db.ref("rooms/"+room+"/turn").transaction(t=>t+1)
 
 }
 
