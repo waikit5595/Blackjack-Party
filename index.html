@@ -32,56 +32,42 @@ button{padding:10px 20px;margin:5px;font-size:16px;border:none;border-radius:8px
 <div id="controls"></div>
 
 <script>
+// ---------- Firebase ----------
 const firebaseConfig={apiKey:"AIzaSyA0d9D8_jSXeaS2opk4ZJulhzfFs9AroUo",authDomain:"blackjack-game-3e5d9.firebaseapp.com",databaseURL:"https://blackjack-game-3e5d9-default-rtdb.asia-southeast1.firebasedatabase.app",projectId:"blackjack-game-3e5d9",storageBucket:"blackjack-game-3e5d9.firebasestorage.app",messagingSenderId:"1006672400092",appId:"1:1006672400092:web:6d0f6fccc3becb9d1dae19"};
 firebase.initializeApp(firebaseConfig);
 const db=firebase.database();
 
+// ---------- Telegram ----------
 const tg=window.Telegram.WebApp; tg.expand();
 let userID=tg.initDataUnsafe.user?.id||Math.floor(Math.random()*1000000);
 let username="Player"; let roomID=null;
 
-// ---------- 牌组 ----------
+// ---------- Deck & Cards ----------
 const suits=["♠","♥","♦","♣"], ranks=["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
 function createDeck(){let d=[];for(let s of suits)for(let r of ranks)d.push({rank:r,suit:s}); return d.sort(()=>Math.random()-0.5);}
 function value(r){if(r=="A") return 11;if(["J","Q","K"].includes(r)) return 10;return parseInt(r);}
 
-// ---------- 点数计算 ----------
+// ---------- Score Calculation ----------
 function score(hand){
     let total=0, aces=hand.filter(c=>c.rank=="A").length;
     let nonAces=hand.filter(c=>c.rank!="A");
     total=nonAces.reduce((sum,c)=>sum+value(c.rank),0);
     let best=0;
-    if(hand.length==2){
-        for(let a of [1,11]){
-            let s=total+a;
-            if(s<=21&&s>best) best=s;
-        }
-    } else if(hand.length==3){
-        for(let a of [1,10]){
-            let s=total+a;
-            if(s<=21&&s>best) best=s;
-        }
-    } else{
-        best=total+aces; // 大于3张A只能当1
-        if(best>21) best=total+aces; // 超过21就直接总和
-    }
+    if(hand.length==2){for(let a of [1,11]){let s=total+a;if(s<=21&&s>best) best=s;}}
+    else if(hand.length==3){for(let a of [1,10]){let s=total+a;if(s<=21&&s>best) best=s;}}
+    else{best=total+aces;}
     return best||total+aces;
 }
-
 function blackjack(hand){return hand.length==2 && ((hand[0].rank=="A" && value(hand[1].rank)==10) || (hand[1].rank=="A" && value(hand[0].rank)==10));}
 function strongPair(hand){return hand.length==2 && hand[0].rank==hand[1].rank && value(hand[0].rank)>=8;}
 
-// ---------- 房间操作 ----------
+// ---------- Room ----------
 function createRoom(){
     username=document.getElementById("nameInput").value.trim()||"Host";
     roomID="room"+Math.floor(Math.random()*9999);
     db.ref("rooms/"+roomID).set({
-        host:userID,
-        started:false,
-        currentTurn:0,
-        reveal:false,
-        deck:createDeck(),
-        players:{[userID]:{name:username,hand:[],stand:false}}
+        host:userID, started:false, currentTurn:0, reveal:false,
+        deck:createDeck(), players:{[userID]:{name:username,hand:[],stand:false}}
     });
     listenRoom();
 }
@@ -93,33 +79,26 @@ function joinRoom(){
     listenRoom();
 }
 
-// ---------- 监听房间 ----------
+// ---------- Listen ----------
 function listenRoom(){
     db.ref("rooms/"+roomID).on("value",snap=>{
         let data=snap.val(); if(!data) return;
         document.getElementById("roomInfo").innerHTML=`Room: ${roomID}`;
         renderPlayers(data);
-
-        // 房主创建显示开始按钮
         if(!data.started && data.host==userID){
             let count=Object.keys(data.players).length;
             document.getElementById("controls").innerHTML=`<div>玩家人数: ${count} (房主可开始游戏)</div><button onclick="startGame()">Start Game</button>`;
         }
-
-        if(data.started){
-            renderGame(data);
-            renderControls(data);
-        }
+        if(data.started){renderGame(data); renderControls(data);}
     });
 }
 
-// ---------- 开始游戏 ----------
+// ---------- Start Game ----------
 function startGame(){
     let ref=db.ref("rooms/"+roomID);
     ref.once("value").then(snap=>{
         let data=snap.val(),deck=data.deck,players=data.players;
         let ids=Object.keys(players);
-        // 庄家为房主，放最后
         let hostID=data.host;
         let others=ids.filter(id=>id!=hostID);
         let order=[...others,hostID];
@@ -128,22 +107,15 @@ function startGame(){
     });
 }
 
-// ---------- 玩家操作 ----------
-function hit(){
-    let ref=db.ref("rooms/"+roomID);
-    ref.once("value").then(snap=>{
-        let data=snap.val(),deck=data.deck,players=data.players;
-        players[userID].hand.push(deck.pop());
-        ref.update({players:players,deck:deck});
-    });
-}
+// ---------- Player Actions ----------
+function hit(){let ref=db.ref("rooms/"+roomID); ref.once("value").then(snap=>{let data=snap.val(),deck=data.deck,players=data.players; players[userID].hand.push(deck.pop()); ref.update({players:players,deck:deck});});}
 function stand(){
     let ref=db.ref("rooms/"+roomID);
     ref.once("value").then(snap=>{
-        let data=snap.val(),players=data.players;
+        let data=snap.val(),players=data.players,order=data.order;
         players[userID].stand=true;
-        let idx=data.order.indexOf(userID);
-        let nextIdx=Math.min(idx+1,data.order.length-1);
+        let idx=order.indexOf(userID);
+        let nextIdx=Math.min(idx+1,order.length-1);
         ref.update({players:players,currentTurn:nextIdx});
     });
 }
@@ -152,22 +124,14 @@ function restartGame(){
     let ref=db.ref("rooms/"+roomID);
     ref.once("value").then(snap=>{
         let data=snap.val(),deck=createDeck(),players=data.players;
-        Object.keys(players).forEach(id=>{players[id].hand=[];players[id].stand=false;});
+        Object.keys(players).forEach(id=>{players[id].hand=[]; players[id].stand=false;});
         ref.update({started:false,currentTurn:0,reveal:false,deck:deck,players:players});
     });
 }
 
-// ---------- 渲染 ----------
-function renderPlayers(data){
-    let html=""; Object.values(data.players).forEach(p=>{html+=`<div class="player">${p.name}</div>`}); document.getElementById("players").innerHTML=html;
-}
-function renderGame(data){
-    let html=""; let ids=data.order||Object.keys(data.players);
-    ids.forEach(id=>{let p=data.players[id]; let turn=id==ids[data.currentTurn]?"turn":""; html+=`<div class="player ${turn}"><h3>${p.name}</h3>`;
-    p.hand.forEach(c=>{html+=id==userID||data.reveal?`<div class="card">${c.rank}${c.suit}</div>`:`<div class="card back">🂠</div>`});
-    if(id==userID) html+=`<div>Score: ${score(p.hand)}</div>`; if(blackjack(p.hand)) html+=`<div class="blackjack">BLACKJACK!</div>`; html+="</div>";});
-    document.getElementById("game").innerHTML=html;
-}
+// ---------- Render ----------
+function renderPlayers(data){let html=""; Object.values(data.players).forEach(p=>{html+=`<div class="player">${p.name}</div>`}); document.getElementById("players").innerHTML=html;}
+function renderGame(data){let html=""; let ids=data.order||Object.keys(data.players); ids.forEach(id=>{let p=data.players[id]; let turn=id==ids[data.currentTurn]?"turn":""; html+=`<div class="player ${turn}"><h3>${p.name}</h3>`; p.hand.forEach(c=>{html+=id==userID||data.reveal?`<div class="card">${c.rank}${c.suit}</div>`:`<div class="card back">🂠</div>`}); if(id==userID) html+=`<div>Score: ${score(p.hand)}</div>`; if(blackjack(p.hand)) html+=`<div class="blackjack">BLACKJACK!</div>`; html+="</div>";}); document.getElementById("game").innerHTML=html;}
 function renderControls(data){
     if(!data.started) return;
     let ids=data.order||Object.keys(data.players);
@@ -177,8 +141,6 @@ function renderControls(data){
     let disableHit=blackjack(player.hand)||strongPair(player.hand)||hs>=21;
     let hitBtn=disableHit?"":`<button onclick="hit()">Hit</button>`; let standBtn=`<button onclick="stand()">Stand / Pass</button>`;
     document.getElementById("controls").innerHTML=hitBtn+standBtn;
-
-    // 游戏最后显示 Reveal + Restart
     let lastPlayer=ids[ids.length-1];
     if(userID==data.host && current==lastPlayer && allStand(data)){
         document.getElementById("controls").innerHTML+=`<br><button onclick="reveal()">Reveal All</button><br><button onclick="restartGame()">Restart Game</button>`;
