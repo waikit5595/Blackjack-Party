@@ -44,8 +44,8 @@ export default function RoundTableSeats({
         const p = playersBySeat.get(seat);
         const isMe = p?.uid === meUid;
 
-        // ✅ 自己永远显示在线
-        const online = p ? (p.uid === meUid || !!presence?.[p.uid]?.online) : false;
+        // ✅ 房间里已加入的人先视为在线，不显示假 Offline
+        const online = !!p;
 
         return (
           <div

@@ -102,8 +102,8 @@ export default function RoomPage() {
 
               <div className="mt-5 space-y-3">
                 {players.map((p) => {
-                  const isOnline =
-                    p.uid === auth.currentUser?.uid || !!presence?.[p.uid]?.online;
+                  // ✅ 只要人在房间列表里，就先视为在线
+                  const isOnline = true;
 
                   return (
                     <div
