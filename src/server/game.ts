@@ -113,11 +113,7 @@ export function generateRoomCode() {
 }
 
 export async function nextAvailableRoomCode(): Promise<string> {
-  while (true) {
-    const code = generateRoomCode();
-    const snap = await adminDb.ref(`rooms/${code}`).get();
-    if (!snap.exists()) return code;
-  }
+  return generateRoomCode();
 }
 
 export function applyResultsAndReveal(room: any) {

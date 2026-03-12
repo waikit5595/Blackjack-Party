@@ -14,14 +14,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Name is required." }, { status: 400 });
     }
 
-    const roomCode = await Promise.race([
-      nextAvailableRoomCode(),
-      new Promise<string>((_, reject) =>
-        setTimeout(() => reject(new Error("Timed out while generating room code.")), 8000)
-      ),
-    ]);
-
+    const roomCode = await nextAvailableRoomCode();
     const now = Date.now();
+
     const player = {
       uid,
       name: name.trim(),
