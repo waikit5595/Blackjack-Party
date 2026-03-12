@@ -10,7 +10,7 @@ export default function ActionButtons({
   canDealerRevealPlayer,
   revealTargets,
   onRevealPlayer,
-  isBustTurn,
+  disableHit,
 }: {
   canAct: boolean;
   onHit: () => void;
@@ -23,7 +23,7 @@ export default function ActionButtons({
   canDealerRevealPlayer: boolean;
   revealTargets: { uid: string; name: string }[];
   onRevealPlayer: (uid: string) => void;
-  isBustTurn: boolean;
+  disableHit: boolean;
 }) {
   return (
     <div className="mt-8 rounded-3xl border border-white/10 bg-black/30 p-4 md:p-5">
@@ -64,7 +64,7 @@ export default function ActionButtons({
           <>
             <button
               onClick={onHit}
-              disabled={!canAct || isBustTurn}
+              disabled={!canAct || disableHit}
               className="px-5 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 font-semibold"
             >
               Hit
@@ -75,7 +75,7 @@ export default function ActionButtons({
               disabled={!canAct}
               className="px-5 py-3 rounded-2xl bg-slate-700 hover:bg-slate-600 font-semibold"
             >
-              {isBustTurn ? "Pass" : "Stand / Pass"}
+              Pass / Stand
             </button>
           </>
         )}

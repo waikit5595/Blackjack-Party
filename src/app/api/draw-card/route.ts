@@ -53,16 +53,42 @@ export async function POST(request: NextRequest) {
     const newCard = drawFromDeck(deck);
     const newHand = evaluateHand([...(hand.cards || []), newCard]);
 
-    const computedHands = {
-      ...(room.hands || {}),
-      [uid]: newHand,
+    // ✅ 新规则：
+    // 抽到第 5 张牌时，不管有没有爆点，都直接公开这名玩家的手牌
+    const shouldPublicReveal = (newHand.cards?.length || 0) >= 5;
+
+    const finalHand = {
+      ...newHand,
+      publicRevealed: shouldPublicReveal ? true : !!newHand.publicRevealed,
     };
 
-    // ✅ 新规则：
-    // 爆点后不自动 pass，仍留在当前玩家回合，必须自己按 Pass/Stand
+    const computedHands = {
+      ...(room.hands || {}),
+      [uid]: finalHand,
+    };
+
+    /**
+     * ✅ 最终规则：
+     * - 爆点不会自动 pass
+     * - 21 点不会自动 pass
+     * - 这两种情况都要自己按 Pass / Stand
+     *
+     * 所以只有以下情况才自动跳下一个人：
+     * - blackjack
+     * - high-pair
+     * - five-card（但五张牌会直接公开）
+     * 另外：
+     * - bust 不自动跳
+     * - 21 不自动跳
+     */
     let nextSeat = room.currentTurnSeat;
 
-    if (newHand.status !== "bust" && newHand.locked) {
+    const shouldAutoMove =
+      finalHand.locked &&
+      finalHand.status !== "bust" &&
+      finalHand.status !== "21";
+
+    if (shouldAutoMove) {
       nextSeat = nextTurnSeat({
         players: room.players,
         hands: computedHands,
@@ -72,11 +98,9 @@ export async function POST(request: NextRequest) {
     const dealerAutoReveal =
       player.isDealer &&
       nextSeat == null &&
-      (newHand.status === "bust" ||
-        newHand.status === "21" ||
-        newHand.status === "blackjack" ||
-        newHand.status === "five-card" ||
-        newHand.autoLockedReason === "high-pair");
+      (finalHand.status === "blackjack" ||
+        finalHand.status === "five-card" ||
+        finalHand.autoLockedReason === "high-pair");
 
     if (dealerAutoReveal) {
       const revealed = applyResultsAndReveal({
@@ -95,7 +119,7 @@ export async function POST(request: NextRequest) {
 
     await roomRef.update({
       deck,
-      [`hands/${uid}`]: newHand,
+      [`hands/${uid}`]: finalHand,
       currentTurnSeat: nextSeat,
       ...touchRoomFields(),
     });

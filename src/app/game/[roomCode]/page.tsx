@@ -52,7 +52,6 @@ export default function GamePage() {
   );
 
   useEffect(() => {
-    // ✅ 如果房间还在 waiting，自动回到选座页面
     if (room?.status === "waiting") {
       router.push(`/room/${roomCode}`);
     }
@@ -78,7 +77,13 @@ export default function GamePage() {
 
   const showNextRound = room?.status === "revealed";
 
-  const isBustTurn = !!(isCurrentTurn && hand?.status === "bust");
+  // ✅ 最终规则：这三种都不能继续 Hit，只能自己按 Pass
+  const disableHit = !!(
+    isCurrentTurn &&
+    (hand?.status === "bust" ||
+      hand?.status === "21" ||
+      hand?.status === "five-card")
+  );
 
   const currentPlayerName = useMemo(() => {
     const seat = room?.currentTurnSeat;
@@ -235,7 +240,7 @@ export default function GamePage() {
           canDealerRevealPlayer={!!canDealerRevealPlayer}
           revealTargets={revealTargets}
           onRevealPlayer={onRevealPlayer}
-          isBustTurn={!!isBustTurn}
+          disableHit={disableHit}
         />
       </div>
     </main>

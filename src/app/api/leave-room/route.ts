@@ -1,22 +1,34 @@
 export const runtime = "nodejs";
+
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/admin";
 import { requireUid } from "@/server/auth";
-import { touchRoomFields } from "@/server/game";
+import { touchRoomFields, cleanupExpiredRooms } from "@/server/game";
 
 export async function POST(request: NextRequest) {
   try {
+    await cleanupExpiredRooms();
+
     const uid = await requireUid(request);
     const { roomCode } = await request.json();
-    if (!roomCode) return NextResponse.json({ error: "Room code required." }, { status: 400 });
+
+    if (!roomCode) {
+      return NextResponse.json({ error: "Room code required." }, { status: 400 });
+    }
 
     const roomRef = adminDb.ref(`rooms/${roomCode}`);
     const snap = await roomRef.get();
-    if (!snap.exists()) return NextResponse.json({ ok: true });
+
+    if (!snap.exists()) {
+      return NextResponse.json({ ok: true });
+    }
 
     const room = snap.val();
     const player = room.players?.[uid];
-    if (!player) return NextResponse.json({ ok: true });
+
+    if (!player) {
+      return NextResponse.json({ ok: true });
+    }
 
     if (room.hostUid === uid) {
       await adminDb.ref(`rooms/${roomCode}`).remove();
@@ -24,8 +36,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    const updates: Record<string, any> = { [`players/${uid}`]: null, [`hands/${uid}`]: null, ...touchRoomFields() };
-    if (player.seat != null) updates[`seats/${player.seat}`] = null;
+    const updates: Record<string, any> = {
+      [`players/${uid}`]: null,
+      [`hands/${uid}`]: null,
+      ...touchRoomFields(),
+    };
+
+    if (player.seat != null) {
+      updates[`seats/${player.seat}`] = null;
+    }
 
     await roomRef.update(updates);
     await adminDb.ref(`presence/${roomCode}/${uid}`).remove().catch(() => undefined);
@@ -43,6 +62,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (error: any) {
     console.error("leave-room error:", error);
-    return NextResponse.json({ error: error.message || "internal" }, { status: 500 });
+    return NextResponse.json(
+      { error: error.message || "internal" },
+      { status: 500 }
+    );
   }
 }

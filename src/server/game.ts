@@ -51,7 +51,9 @@ export function createDeck(): Card[] {
   ];
   const deck: Card[] = [];
   for (const suit of suits) {
-    for (const rank of ranks) deck.push({ rank, suit });
+    for (const rank of ranks) {
+      deck.push({ rank, suit });
+    }
   }
   return shuffle(deck);
 }
@@ -203,15 +205,6 @@ export function generateRoomCode() {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 
-export async function nextAvailableRoomCode(): Promise<string> {
-  for (let i = 0; i < 20; i++) {
-    const code = generateRoomCode();
-    const snap = await adminDb.ref(`rooms/${code}`).get();
-    if (!snap.exists()) return code;
-  }
-  throw new Error("Unable to generate unique room code.");
-}
-
 export function getPlayersInSeatOrder(players: Record<string, any>) {
   return Object.values(players)
     .filter((p: any) => p.seat !== null)
@@ -297,4 +290,47 @@ export function touchRoomFields() {
     updatedAt: Date.now(),
     lastActiveAt: Date.now(),
   };
+}
+
+/**
+ * ✅ 自动清理过期房间
+ * 规则：超过 30 分钟没有活动就删掉 rooms/{roomCode} 和 presence/{roomCode}
+ */
+export async function cleanupExpiredRooms() {
+  const roomsSnap = await adminDb.ref("rooms").get();
+  if (!roomsSnap.exists()) return;
+
+  const rooms = roomsSnap.val() || {};
+  const now = Date.now();
+  const updates: Record<string, null> = {};
+
+  for (const [roomCode, room] of Object.entries<any>(rooms)) {
+    const lastActiveAt = Number(
+      room?.lastActiveAt || room?.updatedAt || room?.createdAt || 0
+    );
+
+    if (!lastActiveAt) continue;
+
+    if (now - lastActiveAt > ROOM_STALE_MS) {
+      updates[`rooms/${roomCode}`] = null;
+      updates[`presence/${roomCode}`] = null;
+    }
+  }
+
+  if (Object.keys(updates).length > 0) {
+    await adminDb.ref().update(updates);
+  }
+}
+
+export async function nextAvailableRoomCode(): Promise<string> {
+  // ✅ 每次创建房间前，先自动清一遍过期房间
+  await cleanupExpiredRooms();
+
+  for (let i = 0; i < 30; i++) {
+    const code = generateRoomCode();
+    const snap = await adminDb.ref(`rooms/${code}`).get();
+    if (!snap.exists()) return code;
+  }
+
+  throw new Error("Unable to generate unique room code.");
 }

@@ -12,10 +12,13 @@ import {
   getPlayersInSeatOrder,
   nextTurnSeat,
   touchRoomFields,
+  cleanupExpiredRooms,
 } from "@/server/game";
 
 export async function POST(request: NextRequest) {
   try {
+    await cleanupExpiredRooms();
+
     const uid = await requireUid(request);
     const { roomCode } = await request.json();
 
@@ -34,7 +37,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (room.status !== "waiting") {
-      return NextResponse.json({ error: "Room not in waiting state." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Room not in waiting state." },
+        { status: 400 }
+      );
     }
 
     const players = room.players || {};
