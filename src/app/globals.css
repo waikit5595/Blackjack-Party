@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html, body {
+  min-height: 100%;
+}
+
+body {
+  @apply text-white;
+  background:
+    radial-gradient(circle at top, rgba(22,101,52,0.9), rgba(5,46,22,1) 45%),
+    linear-gradient(135deg, #022c22 0%, #052e16 100%);
+}
+
+button {
+  @apply disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200;
+}
+
+.table-surface {
+  background:
+    radial-gradient(circle at center, rgba(6,95,70,0.78), rgba(4,47,46,0.96)),
+    linear-gradient(180deg, rgba(6,78,59,0.9), rgba(6,46,26,0.95));
+}
+
+.gold-text {
+  color: #facc15;
+  text-shadow: 0 0 24px rgba(250, 204, 21, 0.25);
+}
