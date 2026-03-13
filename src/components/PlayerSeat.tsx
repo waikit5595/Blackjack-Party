@@ -1,5 +1,6 @@
 import CardView from "./CardView";
 import StatusBadge from "./StatusBadge";
+import FloatingResult from "./FloatingResult";
 import { HandState, PlayerRoomState } from "@/lib/types";
 
 function getPublicLabel(hand?: HandState, revealAll?: boolean, isSelf?: boolean) {
@@ -36,6 +37,10 @@ export default function PlayerSeat({
   isCurrentTurn,
   dealBaseDelay = 0,
   online = true,
+  totalProfit = 0,
+  betAmount = 0,
+  lastDelta = 0,
+  lastSettleLabel = "",
 }: {
   player: PlayerRoomState;
   hand?: HandState;
@@ -44,6 +49,10 @@ export default function PlayerSeat({
   isCurrentTurn: boolean;
   dealBaseDelay?: number;
   online?: boolean;
+  totalProfit?: number;
+  betAmount?: number;
+  lastDelta?: number;
+  lastSettleLabel?: string;
 }) {
   const cards = hand?.cards || [];
   const forceReveal = revealAll || isSelf || !!hand?.publicRevealed;
@@ -51,12 +60,14 @@ export default function PlayerSeat({
 
   return (
     <div
-      className={`rounded-3xl p-4 md:p-5 border backdrop-blur-sm transition-all ${
+      className={`relative rounded-3xl p-4 md:p-5 border backdrop-blur-sm transition-all ${
         isCurrentTurn
           ? "border-yellow-400 bg-yellow-500/10 shadow-gold scale-[1.01]"
           : "border-white/10 bg-black/25"
       }`}
     >
+      <FloatingResult delta={lastDelta} label={lastSettleLabel} />
+
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="font-semibold text-lg flex items-center gap-2 flex-wrap">
@@ -70,6 +81,20 @@ export default function PlayerSeat({
         <div className="flex flex-col items-end gap-2">
           {isCurrentTurn && <StatusBadge label="Your Turn" tone="gold" />}
           {!isCurrentTurn && <StatusBadge label={publicState.label} tone={publicState.tone} />}
+        </div>
+      </div>
+
+      <div className="mt-3 text-sm text-white/75 flex flex-wrap gap-x-4 gap-y-1">
+        {!player.isDealer && (
+          <div>
+            Bet: <span className="font-semibold text-yellow-200">RM{betAmount || 0}</span>
+          </div>
+        )}
+        <div>
+          Total:{" "}
+          <span className="font-semibold">
+            {Number(totalProfit) > 0 ? "+" : ""}RM{Number(totalProfit || 0)}
+          </span>
         </div>
       </div>
 

@@ -52,8 +52,9 @@ export default function GamePage() {
   );
 
   useEffect(() => {
-    if (room?.status === "waiting") {
+    if (room?.status === "betting") {
       router.push(`/room/${roomCode}`);
+      return;
     }
 
     if (room?.status === "closed") {
@@ -77,7 +78,6 @@ export default function GamePage() {
 
   const showNextRound = room?.status === "revealed";
 
-  // ✅ 最终规则：这三种都不能继续 Hit，只能自己按 Pass
   const disableHit = !!(
     isCurrentTurn &&
     (hand?.status === "bust" ||
@@ -119,14 +119,18 @@ export default function GamePage() {
   useEffect(() => {
     if (!room) return;
 
-    if (room.currentRound && room.currentRound !== lastRoundRef.current) {
+    if (
+      room.status === "playing" &&
+      room.currentRound &&
+      room.currentRound !== lastRoundRef.current
+    ) {
       lastRoundRef.current = room.currentRound;
       players.forEach((_, idx) => {
         setTimeout(() => playDeal(), idx * 190);
         setTimeout(() => playDeal(), idx * 190 + 120);
       });
     }
-  }, [room?.currentRound, players, playDeal, room]);
+  }, [room?.currentRound, room?.status, players, playDeal, room]);
 
   useEffect(() => {
     const currentStatus = hand?.status || "";
@@ -178,6 +182,7 @@ export default function GamePage() {
   async function onNextRound() {
     try {
       await nextRoundApi({ roomCode });
+      router.push(`/room/${roomCode}`);
     } catch (error: any) {
       alert(error.message || "Failed to start next round.");
     }
@@ -225,6 +230,8 @@ export default function GamePage() {
             revealAll={!!room?.revealAll}
             currentTurnSeat={room?.currentTurnSeat}
             presence={presence}
+            wallets={room?.wallets}
+            roundBets={room?.roundBets}
           />
         </div>
 

@@ -4,16 +4,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/admin";
 import { requireUid } from "@/server/auth";
 import {
-  applyResultsAndReveal,
   assertRoomNotStale,
+  cleanupExpiredRooms,
   drawFromDeck,
   evaluateHand,
   nextTurnSeat,
+  settleFiveCard,
+  settleFinalAgainstDealer,
   touchRoomFields,
 } from "@/server/game";
 
 export async function POST(request: NextRequest) {
   try {
+    await cleanupExpiredRooms();
+
     const uid = await requireUid(request);
     const { roomCode } = await request.json();
 
@@ -41,7 +45,7 @@ export async function POST(request: NextRequest) {
     }
 
     const hand = room.hands?.[uid];
-    if (!hand || hand.locked || hand.stood) {
+    if (!hand || hand.stood) {
       return NextResponse.json({ error: "You cannot draw now." }, { status: 400 });
     }
 
@@ -53,74 +57,42 @@ export async function POST(request: NextRequest) {
     const newCard = drawFromDeck(deck);
     const newHand = evaluateHand([...(hand.cards || []), newCard]);
 
-    // ✅ 新规则：
-    // 抽到第 5 张牌时，不管有没有爆点，都直接公开这名玩家的手牌
-    const shouldPublicReveal = (newHand.cards?.length || 0) >= 5;
-
-    const finalHand = {
+    room.deck = deck;
+    room.hands[uid] = {
       ...newHand,
-      publicRevealed: shouldPublicReveal ? true : !!newHand.publicRevealed,
+      publicRevealed: (newHand.cards?.length || 0) >= 5 ? true : !!newHand.publicRevealed,
     };
 
-    const computedHands = {
-      ...(room.hands || {}),
-      [uid]: finalHand,
-    };
-
-    /**
-     * ✅ 最终规则：
-     * - 爆点不会自动 pass
-     * - 21 点不会自动 pass
-     * - 这两种情况都要自己按 Pass / Stand
-     *
-     * 所以只有以下情况才自动跳下一个人：
-     * - blackjack
-     * - high-pair
-     * - five-card（但五张牌会直接公开）
-     * 另外：
-     * - bust 不自动跳
-     * - 21 不自动跳
-     */
-    let nextSeat = room.currentTurnSeat;
-
-    const shouldAutoMove =
-      finalHand.locked &&
-      finalHand.status !== "bust" &&
-      finalHand.status !== "21";
-
-    if (shouldAutoMove) {
-      nextSeat = nextTurnSeat({
+    // five-card = immediate reveal + immediate settlement + auto move next player
+    if ((room.hands[uid].cards?.length || 0) >= 5) {
+      settleFiveCard(room, uid);
+      room.currentTurnSeat = nextTurnSeat({
         players: room.players,
-        hands: computedHands,
-      });
-    }
-
-    const dealerAutoReveal =
-      player.isDealer &&
-      nextSeat == null &&
-      (finalHand.status === "blackjack" ||
-        finalHand.status === "five-card" ||
-        finalHand.autoLockedReason === "high-pair");
-
-    if (dealerAutoReveal) {
-      const revealed = applyResultsAndReveal({
-        players: room.players,
-        hands: computedHands,
+        hands: room.hands,
       });
 
-      await roomRef.update({
-        ...revealed,
-        deck,
+      // if dealer was acting and no next turn, reveal remaining final settlement
+      if (player.isDealer && room.currentTurnSeat == null) {
+        settleFinalAgainstDealer(room);
+      }
+
+      room.updatedAt = Date.now();
+      room.lastActiveAt = Date.now();
+      await roomRef.set({
+        ...room,
         ...touchRoomFields(),
       });
-
       return NextResponse.json({ ok: true });
     }
 
-    await roomRef.update({
-      deck,
-      [`hands/${uid}`]: finalHand,
-      currentTurnSeat: nextSeat,
+    // bust and 21 do NOT auto pass
+    room.currentTurnSeat = room.currentTurnSeat;
+
+    room.updatedAt = Date.now();
+    room.lastActiveAt = Date.now();
+
+    await roomRef.set({
+      ...room,
       ...touchRoomFields(),
     });
 

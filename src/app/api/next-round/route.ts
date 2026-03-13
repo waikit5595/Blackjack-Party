@@ -4,15 +4,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/admin";
 import { requireUid } from "@/server/auth";
 import {
-  applyResultsAndReveal,
   assertRoomNotStale,
-  createDeck,
-  drawFromDeck,
-  evaluateHand,
-  getPlayersInSeatOrder,
-  nextTurnSeat,
-  touchRoomFields,
   cleanupExpiredRooms,
+  resetRoundVisualWallets,
+  touchRoomFields,
 } from "@/server/game";
 
 export async function POST(request: NextRequest) {
@@ -46,53 +41,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const players = room.players || {};
-    const ordered = getPlayersInSeatOrder(players);
+    const roundBets = room.roundBets || {};
+    const unlockedBets: Record<string, any> = {};
 
-    if (ordered.length < 2) {
-      return NextResponse.json({ error: "Need at least 2 players." }, { status: 400 });
+    for (const key of Object.keys(roundBets)) {
+      unlockedBets[key] = {
+        ...roundBets[key],
+        locked: false,
+        settled: false,
+      };
     }
 
-    const deck = createDeck();
-    const hands: Record<string, any> = {};
-
-    for (const p of ordered) {
-      hands[p.uid] = evaluateHand([drawFromDeck(deck), drawFromDeck(deck)]);
-    }
-
-    const dealer = ordered.find((p: any) => p.isDealer);
-    const dealerHand = dealer ? hands[dealer.uid] : null;
-
-    const dealerInstantEnd =
-      dealerHand &&
-      (dealerHand.status === "blackjack" ||
-        dealerHand.autoLockedReason === "high-pair");
-
-    if (dealerInstantEnd) {
-      const revealed = applyResultsAndReveal({
-        players,
-        hands,
-      });
-
-      await roomRef.update({
-        ...revealed,
-        currentRound: Number(room.currentRound || 0) + 1,
-        turnOrder: ordered.map((p: any) => p.seat),
-        deck,
-        ...touchRoomFields(),
-      });
-
-      return NextResponse.json({ ok: true });
-    }
+    resetRoundVisualWallets(room);
 
     await roomRef.update({
-      status: "playing",
+      status: "betting",
       revealAll: false,
-      currentTurnSeat: nextTurnSeat({ players, hands }),
-      currentRound: Number(room.currentRound || 0) + 1,
-      turnOrder: ordered.map((p: any) => p.seat),
-      deck,
-      hands,
+      currentTurnSeat: null,
+      turnOrder: [],
+      deck: [],
+      hands: {},
+      roundBets: unlockedBets,
+      wallets: room.wallets || {},
       ...touchRoomFields(),
     });
 

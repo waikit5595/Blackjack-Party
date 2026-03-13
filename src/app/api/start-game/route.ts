@@ -4,15 +4,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/admin";
 import { requireUid } from "@/server/auth";
 import {
-  applyResultsAndReveal,
   assertRoomNotStale,
+  cleanupExpiredRooms,
   createDeck,
   drawFromDeck,
+  ensureWallet,
   evaluateHand,
   getPlayersInSeatOrder,
   nextTurnSeat,
+  resetRoundVisualWallets,
+  settleImmediateInitials,
   touchRoomFields,
-  cleanupExpiredRooms,
 } from "@/server/game";
 
 export async function POST(request: NextRequest) {
@@ -36,11 +38,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Only host can start." }, { status: 403 });
     }
 
-    if (room.status !== "waiting") {
-      return NextResponse.json(
-        { error: "Room not in waiting state." },
-        { status: 400 }
-      );
+    if (room.status !== "betting") {
+      return NextResponse.json({ error: "Room not in betting phase." }, { status: 400 });
     }
 
     const players = room.players || {};
@@ -57,6 +56,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const roundBets = room.roundBets || {};
+    for (const p of playerList) {
+      ensureWallet(room, p.uid);
+      if (p.isDealer) continue;
+      const bet = roundBets[p.uid];
+      if (!bet || !bet.amount || bet.amount <= 0) {
+        return NextResponse.json(
+          { error: "All players must place bet before starting." },
+          { status: 400 }
+        );
+      }
+    }
+
+    resetRoundVisualWallets(room);
+
+    const lockedBets: Record<string, any> = { ...roundBets };
+    for (const key of Object.keys(lockedBets)) {
+      lockedBets[key] = {
+        ...lockedBets[key],
+        locked: true,
+        settled: false,
+      };
+    }
+
+    room.roundBets = lockedBets;
+
     const deck = createDeck();
     const hands: Record<string, any> = {};
     const ordered = getPlayersInSeatOrder(players);
@@ -65,41 +90,33 @@ export async function POST(request: NextRequest) {
       hands[p.uid] = evaluateHand([drawFromDeck(deck), drawFromDeck(deck)]);
     }
 
-    const dealer = ordered.find((p: any) => p.isDealer);
-    const dealerHand = dealer ? hands[dealer.uid] : null;
+    room.players = players;
+    room.hands = hands;
+    room.deck = deck;
+    room.status = "playing";
+    room.revealAll = false;
+    room.currentRound = Number(room.currentRound || 0) + 1;
+    room.turnOrder = ordered.map((p: any) => p.seat);
 
-    const dealerInstantEnd =
-      dealerHand &&
-      (dealerHand.status === "blackjack" ||
-        dealerHand.autoLockedReason === "high-pair");
+    // initial specials settle immediately
+    settleImmediateInitials(room);
 
-    if (dealerInstantEnd) {
-      const revealed = applyResultsAndReveal({
-        players,
-        hands,
-      });
+    room.currentTurnSeat = nextTurnSeat({
+      players: room.players,
+      hands: room.hands,
+    });
 
-      await roomRef.update({
-        ...revealed,
-        currentRound: Number(room.currentRound || 0) + 1,
-        turnOrder: ordered.map((p: any) => p.seat),
-        deck,
-        players,
-        ...touchRoomFields(),
-      });
-
-      return NextResponse.json({ ok: true });
+    // if everyone already settled immediately
+    if (room.currentTurnSeat == null) {
+      room.status = "revealed";
+      room.revealAll = true;
     }
 
-    await roomRef.update({
-      status: "playing",
-      revealAll: false,
-      currentTurnSeat: nextTurnSeat({ players, hands }),
-      currentRound: Number(room.currentRound || 0) + 1,
-      turnOrder: ordered.map((p: any) => p.seat),
-      deck,
-      hands,
-      players,
+    room.updatedAt = Date.now();
+    room.lastActiveAt = Date.now();
+
+    await roomRef.set({
+      ...room,
       ...touchRoomFields(),
     });
 

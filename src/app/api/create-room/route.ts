@@ -6,8 +6,8 @@ import { requireUid } from "@/server/auth";
 import {
   baseRoomTimestamps,
   buildEmptySeats,
-  nextAvailableRoomCode,
   cleanupExpiredRooms,
+  nextAvailableRoomCode,
 } from "@/server/game";
 
 export async function POST(request: NextRequest) {
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     await adminDb.ref(`rooms/${roomCode}`).set({
       roomCode,
       hostUid: uid,
-      status: "waiting",
+      status: "betting",
       dealerSeat: 12,
       revealAll: false,
       currentRound: 0,
@@ -51,6 +51,14 @@ export async function POST(request: NextRequest) {
       seats: { ...buildEmptySeats(), "12": uid },
       players: { [uid]: player },
       hands: {},
+      roundBets: {},
+      wallets: {
+        [uid]: {
+          totalProfit: 0,
+          lastDelta: 0,
+          lastSettleLabel: "",
+        },
+      },
       ...baseRoomTimestamps(),
     });
 

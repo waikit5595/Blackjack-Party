@@ -5,8 +5,8 @@ import { adminDb } from "@/lib/admin";
 import { requireUid } from "@/server/auth";
 import {
   assertRoomNotStale,
-  touchRoomFields,
   cleanupExpiredRooms,
+  touchRoomFields,
 } from "@/server/game";
 
 export async function POST(request: NextRequest) {
@@ -33,8 +33,12 @@ export async function POST(request: NextRequest) {
     const room = snap.val();
     assertRoomNotStale(room);
 
-    if (room.status !== "waiting") {
-      return NextResponse.json({ error: "Game already started." }, { status: 400 });
+    // ✅ 第一阶段统一改成 betting
+    if (room.status !== "betting") {
+      return NextResponse.json(
+        { error: "You can only join during betting phase." },
+        { status: 400 }
+      );
     }
 
     if (room.players && Object.keys(room.players).length >= 12) {
@@ -42,6 +46,7 @@ export async function POST(request: NextRequest) {
     }
 
     const existing = room.players?.[uid];
+
     const player = {
       uid,
       name: name.trim(),
@@ -51,15 +56,25 @@ export async function POST(request: NextRequest) {
       joinedAt: existing?.joinedAt || Date.now(),
     };
 
+    const updates: Record<string, any> = {
+      [`players/${uid}`]: player,
+      ...touchRoomFields(),
+    };
+
+    if (!room.wallets?.[uid]) {
+      updates[`wallets/${uid}`] = {
+        totalProfit: 0,
+        lastDelta: 0,
+        lastSettleLabel: "",
+      };
+    }
+
     await adminDb.ref(`users/${uid}`).set({
       displayName: name.trim(),
       lastSeenAt: Date.now(),
     });
 
-    await roomRef.update({
-      [`players/${uid}`]: player,
-      ...touchRoomFields(),
-    });
+    await roomRef.update(updates);
 
     return NextResponse.json({ ok: true });
   } catch (error: any) {

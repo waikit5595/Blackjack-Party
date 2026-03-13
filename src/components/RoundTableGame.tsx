@@ -1,4 +1,4 @@
-import { HandState, PlayerRoomState, PresenceMap } from "@/lib/types";
+import { HandState, PlayerRoomState, PresenceMap, WalletState, BetState } from "@/lib/types";
 import PlayerSeat from "./PlayerSeat";
 
 const positions: Record<number, string> = {
@@ -23,6 +23,8 @@ export default function RoundTableGame({
   revealAll,
   currentTurnSeat,
   presence,
+  wallets,
+  roundBets,
 }: {
   players: PlayerRoomState[];
   hands: Record<string, HandState> | undefined;
@@ -30,6 +32,8 @@ export default function RoundTableGame({
   revealAll: boolean;
   currentTurnSeat: number | null | undefined;
   presence?: PresenceMap;
+  wallets?: Record<string, WalletState>;
+  roundBets?: Record<string, BetState>;
 }) {
   return (
     <>
@@ -55,6 +59,10 @@ export default function RoundTableGame({
               isCurrentTurn={currentTurnSeat === player.seat}
               dealBaseDelay={index * 0.16}
               online={player.uid === uid || !!presence?.[player.uid]?.online}
+              totalProfit={wallets?.[player.uid]?.totalProfit || 0}
+              betAmount={roundBets?.[player.uid]?.amount || 0}
+              lastDelta={wallets?.[player.uid]?.lastDelta || 0}
+              lastSettleLabel={wallets?.[player.uid]?.lastSettleLabel || ""}
             />
           </div>
         ))}
@@ -71,6 +79,10 @@ export default function RoundTableGame({
             isCurrentTurn={currentTurnSeat === player.seat}
             dealBaseDelay={index * 0.16}
             online={player.uid === uid || !!presence?.[player.uid]?.online}
+            totalProfit={wallets?.[player.uid]?.totalProfit || 0}
+            betAmount={roundBets?.[player.uid]?.amount || 0}
+            lastDelta={wallets?.[player.uid]?.lastDelta || 0}
+            lastSettleLabel={wallets?.[player.uid]?.lastSettleLabel || ""}
           />
         ))}
       </div>

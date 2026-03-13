@@ -1,29 +1,57 @@
 export const runtime = "nodejs";
+
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/admin";
 import { requireUid } from "@/server/auth";
-import { applyResultsAndReveal, assertRoomNotStale, touchRoomFields } from "@/server/game";
+import {
+  assertRoomNotStale,
+  cleanupExpiredRooms,
+  settleFinalAgainstDealer,
+  touchRoomFields,
+} from "@/server/game";
 
 export async function POST(request: NextRequest) {
   try {
+    await cleanupExpiredRooms();
+
     const uid = await requireUid(request);
     const { roomCode } = await request.json();
 
     const roomRef = adminDb.ref(`rooms/${roomCode}`);
     const snap = await roomRef.get();
-    if (!snap.exists()) return NextResponse.json({ error: "Room not found." }, { status: 404 });
+
+    if (!snap.exists()) {
+      return NextResponse.json({ error: "Room not found." }, { status: 404 });
+    }
 
     const room = snap.val();
     assertRoomNotStale(room);
-    if (room.hostUid !== uid) return NextResponse.json({ error: "Only host can reveal." }, { status: 403 });
-    if (room.status !== "playing") return NextResponse.json({ error: "Game must still be playing." }, { status: 400 });
-    if (room.currentTurnSeat != null) return NextResponse.json({ error: "All turns must end first." }, { status: 400 });
 
-    const revealed = applyResultsAndReveal(room);
-    await roomRef.update({ ...revealed, ...touchRoomFields() });
+    if (room.hostUid !== uid) {
+      return NextResponse.json({ error: "Only host can reveal." }, { status: 403 });
+    }
+
+    if (room.status !== "playing") {
+      return NextResponse.json({ error: "Game must still be playing." }, { status: 400 });
+    }
+
+    if (room.currentTurnSeat != null) {
+      return NextResponse.json({ error: "All turns must end first." }, { status: 400 });
+    }
+
+    settleFinalAgainstDealer(room);
+
+    await roomRef.set({
+      ...room,
+      ...touchRoomFields(),
+    });
+
     return NextResponse.json({ ok: true });
   } catch (error: any) {
     console.error("reveal-game error:", error);
-    return NextResponse.json({ error: error.message || "internal" }, { status: 500 });
+    return NextResponse.json(
+      { error: error.message || "internal" },
+      { status: 500 }
+    );
   }
 }

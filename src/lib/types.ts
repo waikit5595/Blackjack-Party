@@ -37,13 +37,25 @@ export interface HandState {
   status: string;
   autoLockedReason?: string | null;
   result?: "win" | "lose" | "draw" | null;
-  publicRevealed?: boolean; // ✅ 新增：庄家可提前公开指定玩家
+  publicRevealed?: boolean;
+}
+
+export interface BetState {
+  amount: number;
+  locked: boolean;
+  settled: boolean;
+}
+
+export interface WalletState {
+  totalProfit: number;
+  lastDelta: number;
+  lastSettleLabel: string;
 }
 
 export interface RoomData {
   roomCode: string;
   hostUid: string;
-  status: "waiting" | "playing" | "revealed" | "closed";
+  status: "betting" | "playing" | "revealed" | "closed";
   createdAt: number;
   updatedAt: number;
   lastActiveAt: number;
@@ -55,6 +67,8 @@ export interface RoomData {
   players?: Record<string, PlayerRoomState>;
   seats?: Record<string, string | null>;
   hands?: Record<string, HandState>;
+  roundBets?: Record<string, BetState>;
+  wallets?: Record<string, WalletState>;
 }
 
 export interface PresenceMap {
